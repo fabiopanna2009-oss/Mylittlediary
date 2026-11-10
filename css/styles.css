@@ -10,7 +10,7 @@
 :root {
   /* paper */
   --paper: #fbf8f1;           /* school notebook paper */
-  --grid: rgba(96, 110, 140, 0.12);   /* the pale squares */
+  --grid: rgba(96, 110, 140, 0.075);  /* the pale squares, kept faint so the page stays calm */
   --margin: rgba(210, 92, 92, 0.42);  /* the red margin line */
   --paper-deep: #f1eadd;      /* sunken areas, empty photo frames */
   --sheet: #fffdf8;           /* dialogs and sheets */
@@ -61,7 +61,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --paper: #1f1813;
-    --grid: rgba(215, 200, 175, 0.075);
+    --grid: rgba(215, 200, 175, 0.05);
     --margin: rgba(224, 120, 110, 0.32);
     --paper-deep: #2a2019;
     --sheet: #2b211a;
@@ -975,12 +975,6 @@ a.note-meta-item:active { opacity: 0.6; }
 .lock-inner { position: relative; z-index: 1; }
 .lock-deco { width: 100%; max-width: 420px; margin-bottom: 14px; flex: 0 0 auto; }
 .lock-deco .scatter { gap: 0 14px; }
-.lock-deco .scribble { font-size: 25px; }
-.lock-deco .scribble.big { font-size: 36px; }
-.lock-deco .scribble.s1 { font-size: 16px; }
-.lock-deco .scribble.s2 { font-size: 22px; }
-.lock-deco .scribble.s3 { font-size: 18px; }
-.lock-deco .doodle { width: 30px; height: 30px; }
 .lock-ridge { position: absolute; left: 0; right: 0; bottom: calc(var(--safe-bottom) - 6px); opacity: 0.4; pointer-events: none; }
 .lock-ridge .ridge { margin: 0; }
 .lock.intro .scribble { animation: writeIn 0.55s var(--ease) both; animation-delay: calc(0.2s + var(--i) * 0.09s); }
@@ -994,12 +988,6 @@ a.note-meta-item:active { opacity: 0.6; }
   .lock { flex-direction: row; gap: 9vw; }
   .lock-deco { max-width: 520px; margin: 0; }
   .lock-deco .scatter { gap: 10px 26px; }
-  .lock-deco .scribble { font-size: 40px; }
-  .lock-deco .scribble.big { font-size: 62px; }
-  .lock-deco .scribble.s1 { font-size: 22px; }
-  .lock-deco .scribble.s2 { font-size: 33px; }
-  .lock-deco .scribble.s3 { font-size: 26px; }
-  .lock-deco .doodle { width: 52px; height: 52px; }
   .lock-inner { margin: 0; }
   .lock-ridge { opacity: 0.5; }
   .lock-ridge .ridge svg { max-height: 30vh; }
@@ -1026,12 +1014,7 @@ a.note-meta-item:active { opacity: 0.6; }
 .opening.leaving { opacity: 0; pointer-events: none; }
 .opening-title { font-family: var(--hand-title); font-size: 44px; line-height: 1; color: var(--pen); animation: fadeIn 0.6s ease-out both; }
 .opening .scatter { max-width: 560px; gap: 2px 18px; }
-.opening .scribble { font-size: 30px; animation: writeIn 0.5s var(--ease) both; animation-delay: calc(0.45s + var(--i) * 0.07s); }
-.opening .scribble.big { font-size: 44px; }
-.opening .scribble.s1 { font-size: 18px; }
-.opening .scribble.s2 { font-size: 25px; }
-.opening .scribble.s3 { font-size: 21px; }
-.opening .doodle { width: 34px; height: 34px; }
+.opening .scribble { animation: writeIn 0.5s var(--ease) both; animation-delay: calc(0.45s + var(--i) * 0.07s); }
 .opening .doodle path { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 0.8s ease-out forwards; animation-delay: calc(0.5s + var(--i) * 0.07s); }
 .opening-pile { position: relative; width: min(86vw, 46vh, 430px); aspect-ratio: 1; flex: 0 0 auto; }
 .opening-photo {
@@ -1054,14 +1037,62 @@ a.note-meta-item:active { opacity: 0.6; }
   .opening { gap: 20px; }
   .opening-title { font-size: 60px; }
   .opening .scatter { max-width: 760px; gap: 6px 26px; }
-  .opening .scribble { font-size: 38px; }
-  .opening .scribble.big { font-size: 58px; }
-  .opening .scribble.s1 { font-size: 22px; }
-  .opening .scribble.s2 { font-size: 31px; }
-  .opening .scribble.s3 { font-size: 26px; }
-  .opening .doodle { width: 46px; height: 46px; }
   .opening-pile { width: min(46vh, 480px); }
   .opening-quote { font-size: 23px; }
+}
+
+/* ---------- 17d. Easy to take in: clear handwriting, labelled blocks ---------- */
+/* Only the journal's name stays in the ballpoint scrawl. Everything you need to read quickly
+   uses the clearer pen hand. */
+.title-1, .title-2, .word-name, .note-title, .note-body h2, .sheet-title, .dialog-title, .new-note-text {
+  font-family: var(--hand);
+  font-weight: 700;
+  letter-spacing: -0.005em;
+}
+.title-1 { font-size: 34px; line-height: 1.1; }
+.title-2 { font-size: 24px; line-height: 1.15; }
+.note-title { font-size: 31px; line-height: 1.18; }
+.note-body h2 { font-size: 24px; line-height: 1.25; text-decoration: none; margin: 0.9em 0 0.2em; }
+.sheet-title { font-size: 25px; }
+.dialog-title { font-size: 23px; line-height: 1.2; }
+.new-note-text { font-size: 22px; font-weight: 400; padding-top: 2px; }
+.new-note.slim .new-note-text { font-size: 19px; }
+.word-name { font-size: 25px; line-height: 1.15; }
+.words.small .word-name { font-size: 21px; }
+.word { padding: 14px 0 13px; }
+.word-sub { font-size: 14.5px; margin-top: 1px; }
+.eyebrow { font-weight: 700; font-size: 15.5px; }
+.lock-title { font-family: var(--hand); }
+
+/* blocks on the first page: each has a label and a clear edge */
+.home .section { margin-top: 30px; }
+.home .ridge { margin-bottom: 14px; }
+.block-label { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--rule-strong); }
+
+/* collections as a compact grid: everything visible at once */
+.words.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; }
+.words.grid .word { padding: 12px 0 11px; gap: 10px; }
+.words.grid .word-name { font-size: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.words.grid .word-sub { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.words.grid .word-cover { width: 34px; height: 42px; padding: 2px; }
+
+/* your words: tidy rows instead of a jumble */
+.scatter { justify-content: flex-start; gap: 6px 16px; padding: 12px 0 0; }
+.scribble, .scribble.s1, .scribble.s2, .scribble.s3 { font-family: var(--hand); font-size: 20px; font-weight: 400; line-height: 1.3; transform: rotate(calc(var(--tilt, 0deg) * 0.3)); }
+.scribble.s1 { color: var(--ink-3); }
+.scribble.s2 { color: var(--caramel); }
+.scribble.s3 { color: var(--pen); }
+.scribble.big { font-family: var(--hand-title); font-size: 36px; line-height: 1; text-decoration: none; transform: rotate(calc(var(--tilt, 0deg) * 0.4)); }
+.doodle, .doodle:nth-of-type(4n) { width: 30px; height: 30px; }
+.home-collage { margin-top: 30px; }
+.spiral { max-width: 360px; margin-top: 16px; }
+.lock-deco .scatter, .opening .scatter { justify-content: center; }
+
+@media (min-width: 900px) {
+  .lock-deco .scribble, .lock-deco .scribble.s1, .lock-deco .scribble.s2, .lock-deco .scribble.s3,
+  .opening .scribble, .opening .scribble.s1, .opening .scribble.s2, .opening .scribble.s3 { font-size: 26px; }
+  .lock-deco .scribble.big, .opening .scribble.big { font-size: 46px; }
+  .lock-deco .doodle, .opening .doodle { width: 38px; height: 38px; }
 }
 
 /* details beside the note (only on wide screens, see below) */
@@ -1201,8 +1232,8 @@ a.note-meta-item:active { opacity: 0.6; }
   .side-add:hover { background: rgba(255, 240, 215, 0.1); }
   .listpane { background-color: var(--paper); }
   .listpane .note-row[aria-current="true"] { background: color-mix(in srgb, var(--pen) 11%, transparent); }
-  .note-title { font-size: 54px; }
-  .display { font-size: 72px; }
+  .note-title { font-size: 36px; }
+  .display { font-size: 68px; }
   .ridge { margin-left: 0; margin-right: 0; max-width: 520px; }
   .editor { padding-left: calc(var(--gutter) + 26px); }
   .editor::before { left: 34px; }
@@ -1219,15 +1250,14 @@ a.note-meta-item:active { opacity: 0.6; }
   .home-grid { display: grid; grid-template-columns: minmax(0, 540px) minmax(0, 1fr); column-gap: 72px; align-items: start; }
   .home-main { grid-column: 1; grid-row: 1; }
   .home-memories { grid-column: 1; grid-row: 2; }
-  .home-collage { grid-column: 2; grid-row: 1 / span 2; position: sticky; top: 30px; margin-top: 6px; }
-  .scatter { gap: 10px 26px; }
-  .scribble { font-size: 40px; }
-  .scribble.big { font-size: 64px; }
-  .scribble.s1 { font-size: 22px; }
-  .scribble.s2 { font-size: 33px; }
-  .scribble.s3 { font-size: 26px; }
-  .doodle { width: 52px; height: 52px; }
-  .spiral { max-width: 520px; }
+  .home-collage { grid-column: 2; grid-row: 1 / span 2; position: sticky; top: 30px; }
+  .home-collage { margin-top: 0; }
+  .home .scatter { gap: 8px 20px; }
+  .home .scribble, .home .scribble.s1, .home .scribble.s2, .home .scribble.s3 { font-size: 23px; }
+  .home .scribble.big { font-size: 42px; }
+  .home .doodle { width: 36px; height: 36px; }
+  .spiral { max-width: 440px; }
+  .words.grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; }
 }
 
 @media (min-width: 1280px) {

@@ -53,10 +53,10 @@ export function wordScatter(words) {
   words.forEach((word, i) => {
     const n = wordNumber(word);
     items.push(h('span', {
-      class: `scribble s${n % 4} ${word.length <= 10 && n % 3 === 0 ? 'big' : ''}`,
+      class: `scribble s${n % 4} ${word.length <= 10 && n % 4 === 0 ? 'big' : ''}`,
       style: { '--i': String(items.length), '--tilt': `${(n % 13) - 6}deg`, '--nudge': `${(n % 15) - 7}px` },
     }, word));
-    if (i % 2 === 1 || words.length < 5) items.push(doodle(DOODLE_ORDER[drawn++ % DOODLE_ORDER.length], items.length));
+    if (i % 3 === 2 || words.length < 4) items.push(doodle(DOODLE_ORDER[drawn++ % DOODLE_ORDER.length], items.length));
   });
   if (!words.length) DOODLE_ORDER.slice(0, 7).forEach((d, i) => items.push(doodle(d, i)));
   return h('div', { class: 'scatter' }, items);

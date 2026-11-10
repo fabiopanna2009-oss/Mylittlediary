@@ -79,7 +79,13 @@ function route() {
 
 async function drawRoute() {
   const { parts, params } = parseHash();
-  const [name = 'home', id] = parts;
+  let [name = 'home', id] = parts;
+  // On a computer, "Notes" opens the latest note straight away instead of an empty pane.
+  if (wide.matches && name === 'notes') {
+    const sort = await db.getSetting('noteSort', 'updatedAt');
+    const latest = (await db.allEntries()).sort((a, b) => b[sort] - a[sort])[0];
+    if (latest) { history.replaceState(null, '', `#/note/${latest.id}`); name = 'note'; id = latest.id; }
+  }
   const isEditor = name === 'note' || name === 'new';
 
   // Leaving a note? Save it first.

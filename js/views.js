@@ -19,7 +19,7 @@ import { ridge, wordScatter } from './drawings.js';
 import { changePin, faceIdSupported, faceIdEnabled, enableFaceId, disableFaceId } from './lock.js';
 import { createBackup, shareBackup, importBackup } from './backup.js';
 
-export const APP_VERSION = '4.4.0';
+export const APP_VERSION = '4.5.0';
 
 // ================= shared pieces =================
 
@@ -190,7 +190,7 @@ export async function renderHome(root, nav, { intro = false } = {}) {
   const recent = [...notes].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 4);
   const needsBackup = notes.length > 0 && (!lastBackup || Date.now() - lastBackup > 14 * 86400000);
 
-  const wordsCol = [...collections].sort(byOrder).slice(0, 6);
+  const wordsCol = [...collections].sort(byOrder).slice(0, 12);
   const main = h('div', { class: 'home-main' },
     h('p', { class: 'home-greeting' }, isTheDay ? `Today is ${specialLabel || 'the day'}.` : greeting(now)),
     h('h1', { class: 'display home-title' }, bookTitle || 'Little Memories'),
@@ -216,9 +216,16 @@ export async function renderHome(root, nav, { intro = false } = {}) {
 
   // The page of scribbles: your words, drawings, and the spiral of photographs.
   const collage = h('div', { class: 'home-collage' },
+    h('div', { class: 'block-label' },
+      h('h2', { class: 'eyebrow' }, 'Words that matter'),
+      textLink(words.length ? 'Edit' : 'Add yours', () => nav.go('settings')),
+    ),
     wordScatter(words),
+    h('div', { class: 'block-label', style: { marginTop: '26px' } },
+      h('h2', { class: 'eyebrow' }, 'Photographs'),
+      photos.length ? textLink('All', () => nav.tab('photos'), { arrow: true }) : null,
+    ),
     photoSpiral(photos, nav, collections),
-    !words.length ? h('button', { class: 'make-yours', onclick: () => nav.go('settings') }, 'Add your own words here') : null,
   );
 
   const memories = h('section', { class: 'section home-memories' },
@@ -227,7 +234,7 @@ export async function renderHome(root, nav, { intro = false } = {}) {
       textLink(collections.length > wordsCol.length ? 'All collections' : 'Open', () => nav.tab('memories'), { arrow: true }),
     ),
     wordsCol.length
-      ? h('ul', { class: 'words' }, wordsCol.map((c) => wordEntrance(c, notes, nav)))
+      ? h('ul', { class: 'words grid' }, wordsCol.map((c) => wordEntrance(c, notes, nav)))
       : h('p', { class: 'empty-note' }, 'Collections gather notes that belong together, under a word that means something to you.'),
   );
 
