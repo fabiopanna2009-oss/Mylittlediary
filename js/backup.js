@@ -134,9 +134,9 @@ async function readZip(blob) {
 const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/heic': 'heic', 'image/webp': 'webp', 'image/gif': 'gif' };
 
 export async function createBackup() {
-  const [entries, collections, photos, bookTitle, noteSort, motto, specialDate, specialLabel] = await Promise.all([
+  const [entries, collections, photos, bookTitle, noteSort, motto, specialDate, specialLabel, words] = await Promise.all([
     db.allEntries(), db.allCollections(), db.allPhotos(),
-    db.getSetting('bookTitle'), db.getSetting('noteSort'), db.getSetting('motto'), db.getSetting('specialDate'), db.getSetting('specialLabel'),
+    db.getSetting('bookTitle'), db.getSetting('noteSort'), db.getSetting('motto'), db.getSetting('specialDate'), db.getSetting('specialLabel'), db.getSetting('words'),
   ]);
 
   const photoFiles = photos.map((p) => ({
@@ -151,7 +151,7 @@ export async function createBackup() {
     app: 'little-memories',
     format: 2,
     exportedAt: new Date().toISOString(),
-    settings: { bookTitle, noteSort, motto, specialDate, specialLabel },
+    settings: { bookTitle, noteSort, motto, specialDate, specialLabel, words },
     collections,
     entries,
     photos: photoFiles.map(({ blob, ...info }) => info),
@@ -243,7 +243,7 @@ export async function importBackup(file) {
   await db.saveEntries(newer);
 
   // Your personal words (title, line, date): restored only where this device has none yet.
-  for (const key of ['bookTitle', 'motto', 'specialDate', 'specialLabel']) {
+  for (const key of ['bookTitle', 'motto', 'specialDate', 'specialLabel', 'words']) {
     const value = diary.settings?.[key];
     if (value && !(await db.getSetting(key))) await db.setSetting(key, value);
   }

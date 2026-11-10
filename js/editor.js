@@ -6,7 +6,7 @@
 // Everything saves by itself a moment after you stop typing.
 
 import { db } from './db.js';
-import { h, icon, debounce, toast, ask, sheet, fmt, todayISO, pickFiles, uid } from './util.js';
+import { h, fill, icon, debounce, toast, ask, sheet, fmt, todayISO, pickFiles, uid } from './util.js';
 import { derive, newNote, isNoteEmpty, noteWhen } from './notes.js';
 import { addPhotoFromFile, photoImg, cleanUpUnusedPhotos } from './photos.js';
 
@@ -271,9 +271,16 @@ export async function renderEditor(root, { id, collection, onDone, openPhoto }) 
   const moreBtn = h('button', { class: 'icon-btn', 'aria-label': 'More', onclick: openMore }, icon('more'));
   const pinMark = h('span', { class: 'pin-mark', hidden: !current.pinned }, icon('pin'));
 
+  const loadCollections = async () => (await db.allCollections()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   async function openMore() {
-    const collections = (await db.allCollections()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-    sheet('This note', (close) => {
+    const collections = await loadCollections();
+    sheet('This note', (close) => details(collections, close));
+  }
+
+  // Everything about the note besides its words: pin, collections, when, where, song.
+  // On a phone this opens as a sheet ("…"); on a wide screen it sits beside the note.
+  function details(collections, close) {
+    {
       const pinRow = h('button', { class: 'set-row' });
       const drawPin = () => { pinRow.replaceChildren(h('span', {}, current.pinned ? 'Unpin from the top' : 'Pin to the top'), icon('pin')); };
       pinRow.addEventListener('click', () => { current.pinned = !current.pinned; pinMark.hidden = !current.pinned; drawPin(); changed(); });
@@ -363,7 +370,7 @@ export async function renderEditor(root, { id, collection, onDone, openPhoto }) 
           },
         }, 'Delete note'),
       ];
-    });
+    }
   }
 
   // ----- toolbar (stays just above the keyboard) -----
@@ -395,6 +402,8 @@ export async function renderEditor(root, { id, collection, onDone, openPhoto }) 
     cleanup = () => {};
   };
 
+  const noteSide = h('aside', { class: 'note-side', 'aria-label': 'About this note' });
+
   // The quiet lines above the title: when, where, and the song.
   const dateLine = h('div', { class: 'eyebrow note-date' });
   const metaLine = h('div', { class: 'note-meta' });
@@ -421,8 +430,10 @@ export async function renderEditor(root, { id, collection, onDone, openPhoto }) 
       h('div', { class: 'bar-actions' }, pinMark, moreBtn),
     ),
     h('main', { class: 'screen editor enter' }, dateLine, metaLine, titleEl, bodyEl, fileInput),
+    noteSide,
     toolbar,
   );
+  loadCollections().then((collections) => { if (current) fill(noteSide, h('h3', { class: 'eyebrow note-side-title' }, 'About this note'), details(collections, () => {})); });
 
   try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch { /* not supported everywhere */ }
   requestAnimationFrame(() => {

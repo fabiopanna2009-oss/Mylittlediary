@@ -6,11 +6,11 @@
 
 /* ---------- 1. Tokens ---------- */
 /* Every colour here comes from something real:
-   squared school paper, blue pen, a dark brown hoodie, peach iced tea, hazel, and one pink sock stripe. */
+   squared school paper, hazel-brown ink, a dark brown hoodie, and peach iced tea. */
 :root {
   /* paper */
   --paper: #fbf8f1;           /* school notebook paper */
-  --grid: rgba(64, 104, 168, 0.115);  /* the pale blue squares */
+  --grid: rgba(96, 110, 140, 0.12);   /* the pale squares */
   --margin: rgba(210, 92, 92, 0.42);  /* the red margin line */
   --paper-deep: #f1eadd;      /* sunken areas, empty photo frames */
   --sheet: #fffdf8;           /* dialogs and sheets */
@@ -20,7 +20,7 @@
   --ink: #2a201a;             /* almost-black brown: what you write */
   --ink-2: #57483e;
   --ink-3: #8c7d70;           /* pencil */
-  --pen: #27448e;             /* blue pen: everything handwritten */
+  --pen: #6a4a2c;             /* hazel-brown ink: everything handwritten */
   --rule: rgba(42, 32, 26, 0.12);
   --rule-strong: rgba(42, 32, 26, 0.2);
 
@@ -29,7 +29,6 @@
   --caramel: #b9722a;         /* iced tea amber: small labels, dates */
   --gold: #d99a45;            /* lighter amber: pins, highlights */
   --hazel: #8a6a3f;
-  --pink: #e79ab0;            /* the sock stripe: used in exactly one small place per screen */
   --tape: rgba(222, 196, 140, 0.62);
   --danger: #a8392b;
   --on-walnut: #fdf6e9;
@@ -62,7 +61,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --paper: #1f1813;
-    --grid: rgba(190, 205, 235, 0.055);
+    --grid: rgba(215, 200, 175, 0.075);
     --margin: rgba(224, 120, 110, 0.32);
     --paper-deep: #2a2019;
     --sheet: #2b211a;
@@ -70,14 +69,13 @@
     --ink: #f1e7d8;
     --ink-2: #cdbca8;
     --ink-3: #96846f;
-    --pen: #a9bdf3;
+    --pen: #dfc296;
     --rule: rgba(241, 231, 216, 0.11);
     --rule-strong: rgba(241, 231, 216, 0.2);
     --walnut: #e0a659;
     --caramel: #dba25c;
     --gold: #e8b56a;
     --hazel: #b7946a;
-    --pink: #d98aa0;
     --tape: rgba(210, 186, 138, 0.5);
     --danger: #ea8f7c;
     --on-walnut: #231913;
@@ -866,20 +864,9 @@ body[data-tabbar="on"] .tabbar { display: flex; }
 .ridge-label { position: absolute; left: 47%; top: -4px; font-family: var(--hand); font-size: 15px; color: var(--caramel); white-space: nowrap; transform: rotate(-3deg); }
 .make-yours { display: inline-flex; margin: 0 0 18px; font-family: var(--hand); font-size: 16px; color: var(--ink-3); text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 4px; }
 
-/* the button to write: hoodie brown, with the sock stripes as its cuff */
-.new-note { position: relative; border-radius: 4px; padding-left: 40px; overflow: hidden; }
-.new-note::before {
-  content: "";
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 22px;
-  background: repeating-linear-gradient(90deg, var(--pink) 0 3px, #fff8f2 3px 7px);
-  opacity: 0.95;
-}
-.new-note.slim { padding-left: 22px; }
-.new-note.slim::before { display: none; }
+/* the button to write: hoodie brown */
+.new-note { border-radius: 4px; }
 .tab-compose { background: var(--walnut); color: var(--on-walnut); }
-.stripes { display: block; width: 46px; height: 13px; margin: 14px auto 0; background: repeating-linear-gradient(180deg, var(--pink) 0 3px, transparent 3px 5px); }
 
 /* a photograph stuck into the notebook */
 .print { margin: 30px 0 26px; }
@@ -914,12 +901,11 @@ a.note-meta-item:active { opacity: 0.6; }
 .note-body li::marker { color: var(--pen); }
 .note-body ul.checklist > li::before { border: 1.6px solid var(--pen); border-radius: 3px 5px 4px 6px; top: 0.34em; }
 .note-body ul.checklist > li[data-checked="true"]::before {
-  background: transparent url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'><path d='M3.5 9.5l3.6 4.2c1.8-4.6 4.4-8.4 8.2-11.4' fill='none' stroke='%2327448e' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/></svg>") center / 118% no-repeat;
+  background: transparent url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'><path d='M3.5 9.5l3.6 4.2c1.8-4.6 4.4-8.4 8.2-11.4' fill='none' stroke='%236a4a2c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/></svg>") center / 118% no-repeat;
   border-color: var(--pen);
 }
 @media (prefers-color-scheme: dark) {
-  .note-body ul.checklist > li[data-checked="true"]::before { filter: brightness(2.4) saturate(0.7); }
-  .new-note::before { opacity: 0.85; }
+  .note-body ul.checklist > li[data-checked="true"]::before { filter: brightness(2.6) saturate(0.6); }
 }
 .pin-mark, .row-pin { color: var(--gold); }
 .switch:checked { background: var(--pen); }
@@ -931,8 +917,61 @@ a.note-meta-item:active { opacity: 0.6; }
 .lock { background-color: var(--paper); background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px); background-size: var(--square) var(--square); }
 .lock-book { margin: 0; font-size: 54px; }
 .lock-title { margin-top: 26px; font-family: var(--hand); font-size: 20px; font-weight: 300; color: var(--ink-2); }
-.lock .stripes { margin-top: 12px; }
 .lock-motto { margin: 4px 0 0; font-family: var(--hand); font-size: 18px; font-weight: 300; color: var(--ink-3); }
+
+/* ---------- 17c. The first page: scribbled words, drawings, the photo spiral ---------- */
+.home-grid { display: block; }
+.home-collage { margin: 34px 0 0; }
+.scatter { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 20px; padding: 4px 0 6px; }
+.scribble {
+  display: inline-block;
+  font-family: var(--hand-title);
+  font-size: 34px;
+  line-height: 1.05;
+  color: var(--pen);
+  transform: rotate(var(--tilt, 0deg)) translateY(var(--nudge, 0px));
+  white-space: nowrap;
+}
+.scribble.s1 { font-family: var(--hand); font-size: 20px; font-weight: 300; color: var(--ink-3); }
+.scribble.s2 { font-size: 29px; color: var(--caramel); }
+.scribble.s3 { font-family: var(--hand); font-size: 23px; font-weight: 400; }
+.scribble.big { font-family: var(--hand-title); font-size: 52px; color: var(--pen); text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 6px; text-decoration-color: color-mix(in srgb, var(--pen) 45%, transparent); }
+.doodle { display: inline-flex; width: 44px; height: 44px; color: var(--ink-3); transform: rotate(var(--tilt, 0deg)); flex: 0 0 auto; }
+.doodle:nth-of-type(3n) { color: var(--pen); }
+.doodle:nth-of-type(4n) { color: var(--caramel); width: 38px; height: 38px; }
+.doodle svg { width: 100%; height: 100%; overflow: visible; }
+
+.spiral { position: relative; width: 100%; max-width: 440px; aspect-ratio: 1; margin: 26px auto 0; }
+.spiral-line { position: absolute; inset: 0; width: 100%; height: 100%; color: var(--ink-3); opacity: 0.45; }
+.spiral-photo {
+  position: absolute;
+  padding: 3px;
+  background: var(--mat);
+  box-shadow: 0 1px 2px rgba(42, 32, 26, 0.2), 0 4px 10px rgba(42, 32, 26, 0.08);
+  transform: translate(-50%, -50%) rotate(var(--tilt, 0deg));
+  transition: transform 0.2s var(--ease);
+}
+.spiral-photo img { width: 100%; height: auto; max-height: 34vw; object-fit: cover; }
+.spiral-photo:active { transform: translate(-50%, -50%) rotate(0deg) scale(1.06); z-index: 40 !important; }
+.spiral-empty { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-4deg); width: 60%; text-align: center; font-family: var(--hand); font-weight: 300; font-size: 17px; color: var(--ink-3); }
+.home-collage .make-yours { display: flex; justify-content: center; margin: 18px auto 0; }
+.words-input { font-family: var(--hand); font-size: 19px; line-height: 1.5; color: var(--pen); border: 1px solid var(--rule-strong); padding: 10px 12px; background: color-mix(in srgb, var(--sheet) 70%, transparent); }
+
+/* when you open the journal, the page writes itself in once */
+.home.intro .scribble { animation: writeIn 0.55s var(--ease) both; animation-delay: calc(0.3s + var(--i) * 0.1s); }
+.home.intro .doodle path { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 0.8s ease-out forwards; animation-delay: calc(0.35s + var(--i) * 0.1s); }
+.home.intro .spiral-line path { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 1.8s ease-out 0.3s forwards; }
+.home.intro .spiral-photo { animation: placeIn 0.45s var(--ease) both; animation-delay: calc(0.6s + var(--i) * 0.08s); }
+.home.intro .ridge path:not(.trail):not(.flag) { stroke-dasharray: 700; stroke-dashoffset: 700; animation: drawLong 1.5s ease-out 0.1s forwards; }
+.home.intro .ridge .trail, .home.intro .ridge .flag, .home.intro .ridge-label, .home.intro .home-motto { animation: fadeIn 0.6s ease-out 1.2s both; }
+@keyframes writeIn { from { clip-path: inset(-20% 100% -20% 0); opacity: 0.2; } to { clip-path: inset(-20% -5% -20% 0); opacity: 1; } }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes drawLong { to { stroke-dashoffset: 0; } }
+@keyframes placeIn { from { opacity: 0; transform: translate(-50%, -50%) rotate(var(--tilt, 0deg)) scale(0.6); } }
+@keyframes fadeIn { from { opacity: 0; } }
+
+/* details beside the note (only on wide screens, see below) */
+.note-side { display: none; }
 
 /* ---------- 18. Computer layout (wide screens) ---------- */
 .sidebar, .listpane { display: none; }
@@ -1053,12 +1092,10 @@ a.note-meta-item:active { opacity: 0.6; }
 
   /* the sidebar is the notebook's cover: hoodie brown, with a paper label */
   .side-label { margin: 0 2px; padding: 12px 14px 12px; background: #fdfaf3; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35); transform: rotate(-1.2deg); border-radius: 2px; }
-  .side-title { padding: 0; font-family: var(--hand-title); font-size: 38px; line-height: 0.9; color: #27448e; }
+  .side-title { padding: 0; font-family: var(--hand-title); font-size: 38px; line-height: 0.9; color: #6a4a2c; }
   .side-motto { margin-top: 4px; font-family: var(--hand); font-size: 14px; font-weight: 300; color: #6b5a4c; overflow-wrap: anywhere; }
-  .side-label .stripes { margin: 10px 0 0; width: 40px; height: 13px; background: repeating-linear-gradient(180deg, #e79ab0 0 3px, transparent 3px 5px); }
   .side-new { background: #f3e6d2; color: #3b281b; }
   .side-new .new-note-text { color: #3b281b; font-size: 28px; }
-  .side-new::before { display: none; }
   .side-new { padding-left: 16px; }
   .side-item, .side-word { color: #e4d3bb; }
   .side-item:hover, .side-word:hover { background: rgba(255, 240, 215, 0.08); }
@@ -1077,6 +1114,58 @@ a.note-meta-item:active { opacity: 0.6; }
   .editor::before { left: 34px; }
   .toolbar { background: color-mix(in srgb, var(--paper) 94%, transparent); }
   button, .set-row, label.toggle-row { cursor: pointer; }
+  .spiral-photo:hover { transform: translate(-50%, -50%) rotate(0deg) scale(1.08); z-index: 40 !important; }
+  .spiral-photo img { max-height: 190px; }
+}
+
+/* ---------- 18b. Large screens: use the room ---------- */
+@media (min-width: 1200px) {
+  /* the first page becomes a double page: the journal on the left, the scribbles and the spiral on the right */
+  .screen.home { max-width: 1240px; }
+  .home-grid { display: grid; grid-template-columns: minmax(0, 540px) minmax(0, 1fr); column-gap: 72px; align-items: start; }
+  .home-main { grid-column: 1; grid-row: 1; }
+  .home-memories { grid-column: 1; grid-row: 2; }
+  .home-collage { grid-column: 2; grid-row: 1 / span 2; position: sticky; top: 30px; margin-top: 6px; }
+  .scatter { gap: 10px 26px; }
+  .scribble { font-size: 40px; }
+  .scribble.big { font-size: 64px; }
+  .scribble.s1 { font-size: 22px; }
+  .scribble.s2 { font-size: 33px; }
+  .scribble.s3 { font-size: 26px; }
+  .doodle { width: 52px; height: 52px; }
+  .spiral { max-width: 520px; }
+}
+
+@media (min-width: 1280px) {
+  /* writing: what belongs to the note sits beside it, no menu needed */
+  :root { --note-side-w: 316px; }
+  body[data-screen="editor"] { padding-right: var(--note-side-w); }
+  body[data-screen="editor"] .note-side {
+    display: block;
+    position: fixed;
+    z-index: 3;
+    top: 0; right: 0; bottom: 0;
+    width: var(--note-side-w);
+    padding: 22px 24px 40px;
+    overflow-y: auto;
+    background: color-mix(in srgb, var(--paper) 97%, var(--ink));
+    border-left: 1px solid var(--rule);
+  }
+  body.is-locked .note-side { visibility: hidden; }
+  .note-side-title { margin: 6px 0 14px; font-size: 19px; }
+  .note-side .sheet-label { margin: 22px 0 8px; }
+  .note-side .set-row { min-height: 46px; font-size: 15px; flex-wrap: wrap; gap: 2px 12px; }
+  .note-side .set-input { flex: 1 1 100%; text-align: left; font-size: 15px; padding: 2px 0 4px; color: var(--ink); }
+  .note-side .tags { gap: 8px 16px; }
+  .note-side .tag { font-size: 15px; }
+  .note-side .danger-btn { margin-top: 26px; }
+  body[data-screen="editor"] .bar .icon-btn[aria-label="More"] { display: none; }
+  body[data-screen="editor"] .toolbar { right: var(--note-side-w); }
+}
+
+@media (min-width: 1600px) {
+  :root { --measure: 760px; --list-w: 360px; }
+  .note-body { font-size: 18.5px; }
 }
 
 /* ---------- 19. Motion preferences ---------- */

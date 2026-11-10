@@ -18,7 +18,7 @@ import { photoImg, photoURL } from './photos.js';
 import { changePin, faceIdSupported, faceIdEnabled, enableFaceId, disableFaceId } from './lock.js';
 import { createBackup, shareBackup, importBackup } from './backup.js';
 
-export const APP_VERSION = '4.1.0';
+export const APP_VERSION = '4.2.0';
 
 // ================= shared pieces =================
 
@@ -123,6 +123,88 @@ function ridge(label = '') {
   return el;
 }
 
+// ---------- the first page: your words, small drawings, and a spiral of photographs ----------
+
+// Pen doodles of ordinary things. Each is one or two wobbly strokes, drawn as if in a notebook margin.
+const DOODLES = {
+  mountain: '<path d="M4 34c6-4 9-11 14-17 3-4 5 1 8-3 3-5 5-9 8-9s5 6 9 11c4 5 8 11 14 16"/><path d="M30 9l3 4 3-3"/>',
+  bottle: '<path d="M21 6h10M22 6c0 5-6 7-6 14v20c0 3 2 4 5 4h10c3 0 5-1 5-4V20c0-7-6-9-6-14"/><path d="M16 25c7 2 13 2 20 0M16 33c7 2 13 2 20 0"/>',
+  ball: '<path d="M26 6c11 0 20 9 20 20s-9 20-20 20S6 37 6 26 15 6 26 6z"/><path d="M26 17l8 6-3 10H21l-3-10zM26 17V7M34 23l10-3M31 33l6 9M21 33l-6 9M18 23L8 20"/>',
+  bike: '<path d="M13 33a8 8 0 1 0 .1 0M41 33a8 8 0 1 0 .1 0"/><path d="M13 41l9-17h14l5 17M22 24l8 17M36 24l-6 17M19 20h6M36 24l-2-6h5"/>',
+  star: '<path d="M26 5l5 14 15 1-12 9 4 15-12-9-12 9 4-15L6 20l15-1z"/>',
+  bracelet: '<path d="M26 8c11 0 19 7 19 17s-8 19-19 19S7 36 7 26 15 8 26 8z"/><path d="M11 17l2 1M17 11l1 2M35 11l-1 2M41 17l-2 1M44 27h-2M40 37l-2-1M12 37l2-1M8 27h2"/><path d="M22 41h8v7h-8z"/>',
+  hairtie: '<path d="M10 26c0-9 7-15 16-15s17 6 17 14-8 16-17 16-16-6-16-15z"/><path d="M14 26c0-7 5-11 12-11s13 4 13 10-6 12-13 12-12-5-12-11z"/><path d="M41 18c3-1 6 1 6 4"/>',
+  sock: '<path d="M18 6h14v22l11 8c3 2 3 6 0 8-3 1-6 1-9-1L18 33z"/><path d="M18 12h14M18 17h14"/>',
+  worm: '<path d="M6 30c4-10 9-10 12 0s8 10 11 0 8-10 11 0 6 8 8 3"/><path d="M8 27l-2-1"/>',
+  note: '<path d="M20 38V12l20-5v26"/><path d="M20 38c0 3-3 5-6 5s-6-2-6-5 3-5 6-5 6 2 6 5zM40 33c0 3-3 5-6 5s-6-2-6-5 3-5 6-5 6 2 6 5z"/>',
+  heart: '<path d="M26 44C12 34 6 26 6 18c0-6 4-10 10-10 4 0 8 3 10 7 2-4 6-7 10-7 6 0 10 4 10 10 0 8-6 16-20 26z"/>',
+};
+const DOODLE_ORDER = ['mountain', 'bottle', 'ball', 'star', 'bracelet', 'bike', 'hairtie', 'worm', 'sock', 'note', 'heart'];
+
+function doodle(name, i) {
+  const el = h('span', { class: 'doodle', 'aria-hidden': 'true', style: { '--i': String(i), '--tilt': `${((i * 37) % 17) - 8}deg` } });
+  el.innerHTML = `<svg viewBox="0 0 52 52" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" pathLength="1">${DOODLES[name].replace(/<path /g, '<path pathLength="1" ')}</svg>`;
+  return el;
+}
+
+// A small number from a word, always the same for the same word (so the page doesn't reshuffle).
+function wordNumber(word) {
+  let n = 7;
+  for (const ch of word) n = (n * 31 + ch.codePointAt(0)) % 9973;
+  return n;
+}
+
+// Your words, scattered like scribbles on a page, with drawings in between.
+function wordScatter(words) {
+  const items = [];
+  let drawn = 0; // each drawing appears once before any repeats
+  words.forEach((word, i) => {
+    const n = wordNumber(word);
+    items.push(h('span', {
+      class: `scribble s${n % 4} ${word.length <= 10 && n % 3 === 0 ? 'big' : ''}`,
+      style: { '--i': String(items.length), '--tilt': `${(n % 13) - 6}deg`, '--nudge': `${(n % 15) - 7}px` },
+    }, word));
+    if (i % 2 === 1 || words.length < 5) items.push(doodle(DOODLE_ORDER[drawn++ % DOODLE_ORDER.length], items.length));
+  });
+  if (!words.length) DOODLE_ORDER.slice(0, 7).forEach((d, i) => items.push(doodle(d, i)));
+  return h('div', { class: 'scatter' }, items);
+}
+
+// Photographs winding inwards along a spiral. The newest is on the outside.
+function photoSpiral(items, nav, collections) {
+  const shown = items.slice(0, 18);
+  const size = 100; // everything is placed in percent, so the spiral scales with the page
+  const spiral = h('div', { class: 'spiral' });
+  spiral.innerHTML = `<svg class="spiral-line" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="0.35" stroke-linecap="round" aria-hidden="true"><path pathLength="1" d="${spiralPath()}"/></svg>`;
+  shown.forEach((it, i) => {
+    const t = shown.length > 1 ? i / (shown.length - 1) : 0;
+    const angle = -1.3 + t * 3.6 * Math.PI;            // how far around
+    const radius = 41 - t * 31;                          // how far from the middle
+    const w = 25 - t * 10;                               // outer photos are larger
+    const x = size / 2 + Math.cos(angle) * radius;
+    const y = size / 2 + Math.sin(angle) * radius;
+    spiral.append(h('button', {
+      class: 'spiral-photo',
+      'aria-label': it.caption || 'Photograph',
+      style: { left: `${x}%`, top: `${y}%`, width: `${w}%`, '--tilt': `${((i * 53) % 19) - 9}deg`, '--i': String(i), zIndex: String(shown.length - i) },
+      onclick: () => openLightbox(shown, i, nav, collections),
+    }, photoImg(it.photoId, 'thumb')));
+  });
+  if (!shown.length) spiral.append(h('span', { class: 'spiral-empty' }, 'your photographs will wind in here'));
+  return spiral;
+}
+
+function spiralPath() {
+  const pts = [];
+  for (let k = 0; k <= 120; k++) {
+    const t = k / 120;
+    const angle = -1.3 + t * 3.6 * Math.PI;
+    const radius = 44 - t * 37;
+    pts.push(`${k ? 'L' : 'M'}${(50 + Math.cos(angle) * radius).toFixed(2)} ${(50 + Math.sin(angle) * radius).toFixed(2)}`);
+  }
+  return pts.join(' ');
+}
+
 // A collection as an entrance: a meaningful word you tap.
 function wordEntrance(c, notes, nav, extra = null) {
   const inside = notes.filter((n) => (n.collections || []).includes(c.id));
@@ -152,31 +234,26 @@ async function createCollection() {
 
 // ================= HOME =================
 
-export async function renderHome(root, nav) {
+export async function renderHome(root, nav, { intro = false } = {}) {
   const [notes, collections, bookTitle, lastBackup, motto, specialDate, specialLabel] = await Promise.all([
     db.allEntries(), db.allCollections(), db.getSetting('bookTitle', 'Little Memories'), db.getSetting('lastBackup'),
     db.getSetting('motto', ''), db.getSetting('specialDate', ''), db.getSetting('specialLabel', ''),
   ]);
+  const words = (await db.getSetting('words', '') || '').split('\n').map((w) => w.trim()).filter(Boolean).slice(0, 24);
+  const photos = [...notes].sort((a, b) => b.createdAt - a.createdAt)
+    .flatMap((n) => (n.photos || []).map((p) => ({ ...p, note: n, when: p.date || iso(n.createdAt) })));
   const now = new Date();
   const isTheDay = specialDate && specialDate.slice(5) === todayISO(now).slice(5);
   const ridgeLabel = specialDate ? [fmt.dots(specialDate).slice(0, 5), specialLabel].filter(Boolean).join(' · ') : '';
   const recent = [...notes].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 4);
-  const words = [...collections].sort(byOrder).slice(0, 6);
   const needsBackup = notes.length > 0 && (!lastBackup || Date.now() - lastBackup > 14 * 86400000);
 
-  fill(root, screen(
-    h('div', { class: 'home-top' },
-      h('div', { class: 'eyebrow' }, friendlyDate(todayISO(now))),
-      h('div', { class: 'bar-actions' },
-        h('button', { class: 'icon-btn', 'aria-label': 'Lock the journal', onclick: () => nav.lock() }, icon('lock')),
-        h('button', { class: 'icon-btn', 'aria-label': 'Settings', onclick: () => nav.go('settings') }, icon('settings')),
-      ),
-    ),
+  const wordsCol = [...collections].sort(byOrder).slice(0, 6);
+  const main = h('div', { class: 'home-main' },
     h('p', { class: 'home-greeting' }, isTheDay ? `Today is ${specialLabel || 'the day'}.` : greeting(now)),
     h('h1', { class: 'display home-title' }, bookTitle || 'Little Memories'),
     motto ? h('p', { class: 'home-motto' }, motto) : null,
     ridge(ridgeLabel),
-    !motto && !specialDate ? h('button', { class: 'make-yours', onclick: () => nav.go('settings') }, 'Make this notebook yours') : null,
 
     h('button', { class: 'new-note', onclick: () => nav.compose() },
       h('span', { class: 'new-note-text' }, 'New note'),
@@ -193,17 +270,34 @@ export async function renderHome(root, nav) {
         ? noteList(recent, nav, 'updatedAt')
         : h('p', { class: 'empty-note' }, 'Nothing written yet. A thought, a memory, a single line. Begin anywhere.'),
     ),
+  );
 
-    h('section', { class: 'section' },
-      h('div', { class: 'section-head' },
-        h('h2', { class: 'eyebrow' }, 'Memories'),
-        textLink(collections.length > words.length ? 'All collections' : 'Open', () => nav.tab('memories'), { arrow: true }),
-      ),
-      words.length
-        ? h('ul', { class: 'words' }, words.map((c) => wordEntrance(c, notes, nav)))
-        : h('p', { class: 'empty-note' }, 'Collections gather notes that belong together, under a word that means something to you.'),
+  // The page of scribbles: your words, drawings, and the spiral of photographs.
+  const collage = h('div', { class: 'home-collage' },
+    wordScatter(words),
+    photoSpiral(photos, nav, collections),
+    !words.length ? h('button', { class: 'make-yours', onclick: () => nav.go('settings') }, 'Add your own words here') : null,
+  );
+
+  const memories = h('section', { class: 'section home-memories' },
+    h('div', { class: 'section-head' },
+      h('h2', { class: 'eyebrow' }, 'Memories'),
+      textLink(collections.length > wordsCol.length ? 'All collections' : 'Open', () => nav.tab('memories'), { arrow: true }),
     ),
+    wordsCol.length
+      ? h('ul', { class: 'words' }, wordsCol.map((c) => wordEntrance(c, notes, nav)))
+      : h('p', { class: 'empty-note' }, 'Collections gather notes that belong together, under a word that means something to you.'),
+  );
 
+  fill(root, h('main', { class: `screen enter home ${intro ? 'intro' : ''}` },
+    h('div', { class: 'home-top' },
+      h('div', { class: 'eyebrow' }, friendlyDate(todayISO(now))),
+      h('div', { class: 'bar-actions' },
+        h('button', { class: 'icon-btn', 'aria-label': 'Lock the journal', onclick: () => nav.lock() }, icon('lock')),
+        h('button', { class: 'icon-btn', 'aria-label': 'Settings', onclick: () => nav.go('settings') }, icon('settings')),
+      ),
+    ),
+    h('div', { class: 'home-grid' }, main, collage, memories),
     needsBackup ? h('button', { class: 'backup-note', onclick: () => nav.go('settings') },
       h('span', {}, lastBackup ? 'It’s been a while since your last backup.' : 'You haven’t made a backup yet.'),
       h('span', {}, 'Back up now'),
@@ -264,7 +358,6 @@ export async function renderSidebar(el, nav, screenName, collectionId) {
     h('div', { class: 'side-label' },
       h('div', { class: 'side-title' }, bookTitle || 'Little Memories'),
       motto ? h('div', { class: 'side-motto' }, motto) : null,
-      h('span', { class: 'stripes' }),
     ),
     h('button', { class: 'new-note side-new', onclick: () => nav.compose() }, h('span', { class: 'new-note-text' }, 'New note'), icon('compose')),
     h('nav', { class: 'side-nav', 'aria-label': 'Places' },
@@ -646,7 +739,7 @@ export async function renderSearch(root, nav) {
 // ================= SETTINGS =================
 
 export async function renderSettings(root, nav) {
-  const [motto, specialDate, specialLabel] = await Promise.all([db.getSetting('motto', ''), db.getSetting('specialDate', ''), db.getSetting('specialLabel', '')]);
+  const [motto, specialDate, specialLabel, wordsText] = await Promise.all([db.getSetting('motto', ''), db.getSetting('specialDate', ''), db.getSetting('specialLabel', ''), db.getSetting('words', '')]);
   const [bookTitle, writingFont, lastBackup, notes, photoIds, canFaceId, hasFaceId] = await Promise.all([
     db.getSetting('bookTitle', 'Little Memories'),
     db.getSetting('writingFont', 'clean'),
@@ -741,10 +834,18 @@ export async function renderSettings(root, nav) {
             type: 'date', value: specialDate || '', 'aria-label': 'A date that matters',
             oninput: async (e) => { await db.setSetting('specialDate', e.target.value); dateText.textContent = e.target.value ? fmt.medium(e.target.value) : 'Choose'; toast('Saved'); },
           })),
-        textRow('What that day is', 'specialLabel', specialLabel, 'e.g. where it began'),
+        textRow('What that day is', 'specialLabel', specialLabel, 'A word or two'),
         h('label', { class: 'set-row' }, h('span', {}, 'Writing font'), fontSelect),
       ),
-      h('p', { class: 'set-note' }, 'These words are saved only on this device. The line appears under the title, and the date is marked at the top of the mountain on the first page.'),
+      h('section', { class: 'set-group' },
+        h('h2', { class: 'eyebrow' }, 'Words that matter'),
+        h('textarea', {
+          class: 'sheet-input words-input', rows: 6, value: wordsText, 'aria-label': 'Words that matter', maxlength: 800,
+          placeholder: 'One per line: a nickname, a phrase, a place, a date, a song…',
+          onchange: async (e) => { await db.setSetting('words', e.target.value); toast('Saved'); },
+        }),
+      ),
+      h('p', { class: 'set-note' }, 'These are scribbled across the first page, between small drawings and a spiral of your photographs. Everything here is saved only on this device: the line appears under the title, and the date is marked at the top of the mountain.'),
       group('Privacy',
         h('button', { class: 'set-row', onclick: async () => { if (await changePin()) toast('PIN changed'); } }, h('span', {}, 'Change PIN'), icon('chevron')),
         faceIdRow,

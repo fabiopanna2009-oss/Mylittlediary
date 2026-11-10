@@ -34,6 +34,7 @@ const TAB_OF = { home: '', notes: 'notes', memories: 'memories', photos: 'memori
 let depth = 0;               // how many screens deep we are (for the back button)
 let editorOpen = false;
 let rendering = Promise.resolve();
+let introPending = true;      // the first page writes itself in once, when you open the journal
 let lastDrawn = null;        // the address of the screen currently shown
 const scrollMemory = new Map(); // where you were in a list, for when you come back
 
@@ -111,7 +112,7 @@ async function drawRoute() {
 
 function draw(name, id, params) {
   switch (name) {
-    case 'home': return renderHome(root, nav);
+    case 'home': { const intro = introPending; introPending = false; return renderHome(root, nav, { intro }); }
     case 'notes': return wide.matches ? renderNotesPlaceholder(root, nav) : renderNotes(root, nav);
     case 'memories': return renderMemories(root, nav);
     case 'photos': return renderPhotos(root, nav);

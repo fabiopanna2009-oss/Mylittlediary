@@ -2,9 +2,9 @@
 
 The simplicity of Apple Notes with the feeling of opening your own school notebook. Writing comes first; collections, dates and photographs give it meaning.
 
-**The look comes from real things:** squared notebook paper with a red margin line, titles in blue pen handwriting, a dark brown hoodie, peach iced tea, a pink sock stripe, and a mountain ridge drawn across the first page. Photographs are taped in.
+**The look comes from real things:** squared notebook paper with a red margin line, titles handwritten in hazel-brown ink, a dark brown hoodie, peach iced tea, and a mountain ridge drawn across the first page. Photographs are taped in.
 
-**Make it yours** (in Settings): your own title, a line under the title, and a date that matters, which is marked at the top of the mountain. These words are saved only on your device, never in this code.
+**Make it yours** (in Settings): your own title, a line under the title, a date that matters (marked at the top of the mountain), and *words that matter*: nicknames, phrases, places. They are scribbled across the first page between small pen drawings and a spiral of your photographs, and the page writes itself in when you open the journal. All of this is saved only on your device, never in this code.
 
 **Your journal lives only on your phone.** This repository contains just the empty app (the code). None of your notes, photos or names are ever stored here or sent anywhere.
 
@@ -23,7 +23,7 @@ The simplicity of Apple Notes with the feeling of opening your own school notebo
 - **Backups.** Export everything (notes + original photos) as one `.zip` file and restore it on any phone.
 - **Warm dark mode** and **offline** use.
 
-**On a computer** (install it from Chrome or Edge via the install icon in the address bar) the journal shows three panes like Apple Notes on a Mac: sidebar with your collections, the list of notes, and the note you are writing. Shortcuts: `Alt+N` new note, `Ctrl+K` search, `Ctrl+B` bold, `Ctrl+Shift+L` lock. Notes are stored separately on each device; move them with *Export backup* / *Restore from a backup*.
+**On a computer** (install it from Chrome or Edge via the install icon in the address bar) the journal shows three panes like Apple Notes on a Mac: sidebar with your collections, the list of notes, and the note you are writing. On large screens the note's details (collections, when, where, song) sit beside it, and the first page becomes a double page. Shortcuts: `Alt+N` new note, `Ctrl+K` search, `Ctrl+B` bold, `Ctrl+Shift+L` lock. Notes are stored separately on each device; move them with *Export backup* / *Restore from a backup*.
 
 Four places at the bottom (on the phone): **Home**, **Notes**, **Memories**, **Search**, with *new note* always in the middle.
 

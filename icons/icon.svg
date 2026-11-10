@@ -1,12 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- a school notebook: hoodie-brown cover, a paper label, pen lines, sock stripes -->
+  <!-- a school notebook: hoodie-brown cover, a paper label, hazel pen lines, the ridge -->
   <rect width="512" height="512" fill="#46301f"/>
   <rect width="58" height="512" fill="#000" opacity="0.2"/>
   <g transform="rotate(-2 256 230)">
-    <rect x="126" y="130" width="290" height="190" rx="4" fill="#fdfaf3"/>
-    <path d="M160 196c22-10 34 8 56-2s30-22 54-12 36 14 58 4 30-8 54-2" fill="none" stroke="#27448e" stroke-width="9" stroke-linecap="round"/>
-    <path d="M160 246c20-6 40 4 62-2s38-8 60-2" fill="none" stroke="#27448e" stroke-width="7" stroke-linecap="round" opacity="0.75"/>
-    <rect x="160" y="278" width="64" height="5" fill="#e79ab0"/><rect x="160" y="289" width="64" height="5" fill="#e79ab0"/><rect x="160" y="300" width="64" height="5" fill="#e79ab0"/>
+    <rect x="126" y="130" width="290" height="180" rx="4" fill="#fdfaf3"/>
+    <path d="M160 196c22-10 34 8 56-2s30-22 54-12 36 14 58 4 30-8 54-2" fill="none" stroke="#6a4a2c" stroke-width="9" stroke-linecap="round"/>
+    <path d="M160 250c20-6 40 4 62-2s38-8 60-2" fill="none" stroke="#6a4a2c" stroke-width="7" stroke-linecap="round" opacity="0.7"/>
   </g>
   <path d="M96 420c40-6 70-26 100-48 22-16 34-2 58-22 20-16 30-26 44-24 16 2 24 22 50 34 28 13 52 30 84 36" fill="none" stroke="#e0a659" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
