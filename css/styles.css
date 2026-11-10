@@ -1108,6 +1108,19 @@ img.drawing { opacity: 0.92; }
   .lock-deco .doodle, .opening .doodle { width: 38px; height: 38px; }
 }
 
+/* import from ChatGPT */
+.import-steps { margin: 4px 0 14px; padding-left: 20px; font-size: 14.5px; line-height: 1.6; color: var(--ink-2); }
+.import-steps .link { display: inline; font-size: 14.5px; margin-left: 4px; }
+.import-box { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; line-height: 1.45; border: 1px solid var(--rule-strong); padding: 10px 12px; background: color-mix(in srgb, var(--paper) 60%, transparent); }
+.import-actions { display: flex; justify-content: space-between; align-items: center; padding: 10px 0 4px; }
+.import-summary { margin: 14px 0 6px; font-family: var(--hand); font-weight: 700; font-size: 16px; line-height: 1.3; color: var(--pen); }
+.import-error { margin: 14px 0 0; font-size: 14.5px; line-height: 1.5; color: var(--danger); }
+.import-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); max-height: 34vh; overflow-y: auto; }
+.import-list li { display: flex; flex-direction: column; gap: 1px; padding: 9px 0; border-bottom: 1px solid var(--rule); }
+.import-list strong { font-weight: 600; font-size: 15.5px; }
+.import-list span { font-size: 13.5px; color: var(--ink-3); }
+.import-go { margin-top: 16px; justify-content: center; }
+
 /* details beside the note (only on wide screens, see below) */
 .note-side { display: none; }
 

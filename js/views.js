@@ -17,10 +17,11 @@ import { noteTitle, noteExcerpt, noteWhen } from './notes.js';
 import { photoImg, photoURL, addDrawingFromFile, forgetPhotoURL } from './photos.js';
 import { ridge, wordScatter, doodle, DOODLES } from './drawings.js';
 import { getTheme, setTheme } from './theme.js';
+import { CHATGPT_INSTRUCTIONS, parseImport, applyImport } from './importer.js';
 import { changePin, faceIdSupported, faceIdEnabled, enableFaceId, disableFaceId } from './lock.js';
 import { createBackup, shareBackup, importBackup } from './backup.js';
 
-export const APP_VERSION = '4.10.0';
+export const APP_VERSION = '4.11.0';
 
 // ================= shared pieces =================
 
@@ -955,6 +956,72 @@ export async function renderSettings(root, nav) {
   });
   drawDrawings();
 
+  // ----- import from ChatGPT (or any text in the same format) -----
+  const openImport = () => sheet('Import from ChatGPT', (close) => {
+    const box = h('textarea', { class: 'sheet-input import-box', rows: 7, placeholder: 'Paste ChatGPT’s answer here', 'aria-label': 'Text to import', spellcheck: false });
+    const preview = h('div', { class: 'import-preview' });
+    const fileInput = h('input', { type: 'file', accept: '.json,.txt,application/json,text/plain', hidden: true });
+    fileInput.addEventListener('change', async () => { const f = fileInput.files[0]; fileInput.value = ''; if (f) { box.value = await f.text(); check(); } });
+    let parsed = null;
+
+    const check = () => {
+      try {
+        parsed = parseImport(box.value);
+        const plural2 = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+        fill(preview,
+          h('p', { class: 'import-summary' }, [
+            parsed.notes.length ? plural2(parsed.notes.length, 'note', 'notes') : null,
+            parsed.collections.length ? plural2(parsed.collections.length, 'collection', 'collections') : null,
+            parsed.words.length ? plural2(parsed.words.length, 'word or sentence', 'words and sentences') : null,
+          ].filter(Boolean).join(' · ')),
+          parsed.notes.length ? h('ul', { class: 'import-list' }, parsed.notes.map((n) => h('li', {},
+            h('strong', {}, n.title || 'Untitled'),
+            h('span', {}, [
+              n.dateKind === 'exact' && n.createdAt ? fmt.medium(iso(n.createdAt)) : (n.dateWords || (n.dateKind === 'unknown' ? 'date unknown' : 'today')),
+              n.collections.join(', ') || null,
+            ].filter(Boolean).join(' · ')),
+          ))) : null,
+          h('button', {
+            class: 'new-note slim import-go',
+            onclick: async () => {
+              const r = await applyImport(parsed);
+              close();
+              toast(r.notes || r.words || r.collections
+                ? `Added ${[r.notes ? `${r.notes} ${r.notes === 1 ? 'note' : 'notes'}` : null, r.collections ? `${r.collections} ${r.collections === 1 ? 'collection' : 'collections'}` : null, r.words ? `${r.words} ${r.words === 1 ? 'word' : 'words'}` : null].filter(Boolean).join(', ')}${r.skipped ? ` (${r.skipped} already there)` : ''}`
+                : 'Everything was already in your journal');
+              window.dispatchEvent(new CustomEvent('notes-changed', { detail: {} }));
+              renderSettings(root, nav);
+            },
+          }, h('span', { class: 'new-note-text' }, 'Add to my journal')),
+        );
+      } catch (err) {
+        parsed = null;
+        fill(preview, h('p', { class: 'import-error' }, err.message));
+      }
+    };
+
+    return [
+      h('ol', { class: 'import-steps' },
+        h('li', {}, 'Give ChatGPT the instructions once ', h('button', {
+          class: 'link',
+          onclick: async (e) => {
+            const button = e.currentTarget; // (after "await" the event no longer knows its button)
+            try { await navigator.clipboard.writeText(CHATGPT_INSTRUCTIONS); button.textContent = 'Copied ✓'; } catch { toast('Copying isn’t allowed here. The instructions are in the README.'); }
+          },
+        }, 'Copy instructions')),
+        h('li', {}, 'After talking, tell it: “export to Little Memories”.'),
+        h('li', {}, 'Copy its answer and paste it below. You see what would be added before anything is saved.'),
+      ),
+      box,
+      h('div', { class: 'import-actions' },
+        h('button', { class: 'link quiet', onclick: () => pickFiles(fileInput) }, 'Choose a file instead'),
+        h('button', { class: 'link', onclick: check }, 'Check'),
+      ),
+      fileInput,
+      preview,
+    ];
+  });
+
   const group = (title, ...rows) => h('section', { class: 'set-group' }, h('h2', { class: 'eyebrow' }, title), h('div', { class: 'set-list' }, rows));
   const info = (label, value) => h('div', { class: 'set-row static' }, h('span', {}, label), h('span', { class: 'set-value' }, value));
 
@@ -1012,6 +1079,10 @@ export async function renderSettings(root, nav) {
       h('p', { class: 'set-note' }, canFaceId
         ? 'The journal locks every time you leave the app. Face ID uses a passkey saved in your iPhone’s Passwords app.'
         : 'The journal locks every time you leave the app. Face ID becomes available when the journal is opened from your Home Screen.'),
+      group('Bring in notes',
+        h('button', { class: 'set-row', onclick: openImport }, h('span', {}, 'Import from ChatGPT'), icon('chevron')),
+      ),
+      h('p', { class: 'set-note' }, 'Turn a conversation into notes: ChatGPT writes them in a simple format, you paste them here. The app never connects to ChatGPT; you decide what comes in.'),
       group('Backup',
         exportBtn,
         h('button', { class: 'set-row', onclick: () => pickFiles(importInput) }, h('span', {}, 'Restore from a backup'), icon('chevron')),

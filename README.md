@@ -31,6 +31,55 @@ The simplicity of Apple Notes with the feeling of opening your own school notebo
 
 Four places at the bottom (on the phone): **Home**, **Notes**, **Memories**, **Search**, with *new note* always in the middle.
 
+## Bringing in notes from ChatGPT
+
+The app never connects to ChatGPT (or anything else). Instead, ChatGPT writes your notes in a simple format and you paste them in. You see a preview before anything is saved, and importing the same answer twice adds nothing.
+
+1. Give ChatGPT these instructions once (in the app: **Settings → Import from ChatGPT → Copy instructions**).
+2. After a conversation, tell it: **"export to Little Memories"**.
+3. Copy its answer, open **Settings → Import from ChatGPT**, paste, tap **Check**, then **Add to my journal**.
+
+<details>
+<summary>The instructions for ChatGPT</summary>
+
+```text
+I keep a private journal in an app called Little Memories. Whenever I say "export to Little Memories", turn what we talked about into notes for that app.
+
+Answer with ONE code block containing only JSON in exactly this format, and nothing else:
+
+{
+  "notes": [
+    {
+      "title": "short title",
+      "text": "the note itself",
+      "date": "YYYY-MM-DD",
+      "dateKind": "exact",
+      "dateWords": "",
+      "collections": ["Collection name"],
+      "place": { "name": "", "url": "" },
+      "song": { "title": "", "url": "" },
+      "pinned": false
+    }
+  ],
+  "collections": [ { "name": "Collection name", "description": "" } ],
+  "words": ["a word or a short sentence that matters to me"]
+}
+
+Rules:
+- Write every note in my own voice, in the first person, using my own words from our conversation as much as possible. Keep it honest and simple. Do not make it sound like a poem or a self-help text.
+- Never invent facts, dates, names, places or quotes. If I did not say it, leave it out.
+- Dates: use "date" only if I gave one. If a date is only roughly known, set "dateKind" to "around". If it is unknown, set "dateKind" to "unknown". In both cases describe it in "dateWords" in my words (for example "the last Friday before summer").
+- "text" is plain text. Put an empty line between paragraphs. A line starting with "# " is a heading, "- " is a list item, "[ ] " is an open checklist item and "[x] " a ticked one. Use **double stars** for bold, sparingly.
+- "collections" are names of my collections. Reuse the names I already use. Only suggest a new one if nothing fits.
+- Leave out "place", "song", "collections" or "words" when there is nothing to put there.
+- One note per memory or thought. Do not merge different memories into one note.
+- Do not add advice, comments or explanations, neither inside the notes nor around the code block.
+```
+
+</details>
+
+Drawings made elsewhere go in through **Settings → Your drawings**, photographs through the photo button inside a note.
+
 ## Putting it on your iPhone
 
 The app has to be online once (over HTTPS) so your iPhone can install it. After that it works offline.
@@ -81,6 +130,7 @@ python3 -m http.server 8000
 | `js/views.js` | The screens: Home, Notes, Memories, a collection, Photographs, Search, Settings |
 | `js/editor.js` | Writing a note: formatting, checklists, photographs, autosave |
 | `js/drawings.js` | The hand-drawn parts: the mountain ridge, pen doodles, your words scribbled on a page |
+| `js/importer.js` | Import from ChatGPT: the instructions, reading the pasted text, adding the notes |
 | `js/notes.js` | What a note is, cleaning its HTML, and upgrading notes from older versions |
 | `js/db.js` | Saving on the phone with IndexedDB (think of it as a small database with tables) |
 | `js/photos.js` | Saving photos and making small preview copies |
