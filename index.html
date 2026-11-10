@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- viewport-fit=cover lets the app use the whole iPhone screen (around the Dynamic Island) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>My Diary</title>
+
+  <!-- Makes it behave like an app when added to the iPhone home screen -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="My Diary">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#f6f3ee" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1a1a1c" media="(prefers-color-scheme: dark)">
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ===================== LOCK SCREEN ===================== -->
+  <section id="view-lock" class="view lock" hidden>
+    <div class="lock-inner">
+      <div class="lock-icon" aria-hidden="true">📔</div>
+      <h1 id="lock-title">Enter PIN</h1>
+      <p id="lock-hint" class="muted">&nbsp;</p>
+      <div id="pin-dots" class="pin-dots" aria-hidden="true">
+        <span></span><span></span><span></span><span></span>
+      </div>
+      <div class="keypad" id="keypad">
+        <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
+        <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button>
+        <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button>
+        <span></span><button data-key="0">0</button>
+        <button data-key="back" class="key-back" aria-label="Delete">⌫</button>
+      </div>
+      <button id="btn-lock-cancel" class="text-btn lock-cancel" hidden>Cancel</button>
+    </div>
+  </section>
+
+  <!-- ===================== ENTRY LIST ===================== -->
+  <section id="view-list" class="view" hidden>
+    <header class="topbar">
+      <h1 class="topbar-title">My Diary</h1>
+      <div class="topbar-actions">
+        <button id="btn-lock" class="icon-btn" aria-label="Lock">🔒</button>
+        <button id="btn-settings" class="icon-btn" aria-label="Settings">⚙️</button>
+      </div>
+    </header>
+    <div class="content">
+      <input id="search" class="search" type="search" placeholder="Search entries…" autocomplete="off">
+      <div id="entry-list"></div>
+      <div id="empty" class="empty" hidden>
+        <div class="empty-icon">✍️</div>
+        <p>No entries yet.</p>
+        <p class="muted">Tap <strong>+</strong> to write your first one.</p>
+      </div>
+    </div>
+    <button id="btn-new" class="fab" aria-label="New entry">+</button>
+  </section>
+
+  <!-- ===================== EDITOR ===================== -->
+  <section id="view-editor" class="view" hidden>
+    <header class="topbar">
+      <button id="btn-cancel" class="text-btn">Cancel</button>
+      <h1 class="topbar-title small" id="editor-heading">New entry</h1>
+      <button id="btn-save" class="text-btn strong">Save</button>
+    </header>
+    <div class="content editor">
+      <input id="f-date" type="date" class="field">
+      <div class="moods" id="moods" role="radiogroup" aria-label="Mood">
+        <button data-mood="5" aria-label="Great">😄</button>
+        <button data-mood="4" aria-label="Good">🙂</button>
+        <button data-mood="3" aria-label="Okay">😐</button>
+        <button data-mood="2" aria-label="Not good">😕</button>
+        <button data-mood="1" aria-label="Bad">😢</button>
+      </div>
+      <input id="f-title" class="field" type="text" placeholder="Title (optional)" maxlength="120">
+      <textarea id="f-text" class="field textarea" placeholder="How was your day?"></textarea>
+      <button id="btn-delete" class="danger-btn" hidden>Delete entry</button>
+    </div>
+  </section>
+
+  <!-- ===================== SETTINGS ===================== -->
+  <section id="view-settings" class="view" hidden>
+    <header class="topbar">
+      <button id="btn-settings-back" class="text-btn">‹ Back</button>
+      <h1 class="topbar-title small">Settings</h1>
+      <span class="text-btn" aria-hidden="true"></span>
+    </header>
+    <div class="content">
+      <h2 class="group-title">Security</h2>
+      <div class="group">
+        <button id="btn-change-pin" class="row">Change PIN <span class="chev">›</span></button>
+        <label class="row">
+          Auto-lock
+          <select id="s-autolock">
+            <option value="0">Immediately</option>
+            <option value="60">After 1 minute</option>
+            <option value="300">After 5 minutes</option>
+          </select>
+        </label>
+      </div>
+
+      <h2 class="group-title">Backup</h2>
+      <div class="group">
+        <button id="btn-export" class="row">Export backup <span class="chev">›</span></button>
+        <label class="row" for="import-file">Import backup <span class="chev">›</span></label>
+        <input id="import-file" type="file" accept="application/json,.json" hidden>
+      </div>
+      <p class="note">Your entries are stored <strong>only on this iPhone</strong>. If you delete the app or get a new phone they are gone, so export a backup regularly and save it in Files or iCloud Drive.</p>
+
+      <h2 class="group-title">Info</h2>
+      <div class="group">
+        <div class="row">Entries <span id="s-count" class="muted">0</span></div>
+        <div class="row">Last backup <span id="s-last-backup" class="muted">Never</span></div>
+        <div class="row">Version <span class="muted" id="s-version"></span></div>
+      </div>
+    </div>
+  </section>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="db.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
