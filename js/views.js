@@ -21,7 +21,7 @@ import { CHATGPT_INSTRUCTIONS, parseImport, applyImport } from './importer.js';
 import { changePin, faceIdSupported, faceIdEnabled, enableFaceId, disableFaceId, getGate, addQuestion, removeQuestion, setGateEnabled } from './lock.js';
 import { createBackup, shareBackup, importBackup } from './backup.js';
 
-export const APP_VERSION = '4.14.0';
+export const APP_VERSION = '4.15.0';
 
 // ================= shared pieces =================
 
@@ -846,12 +846,21 @@ export async function renderSettings(root, nav) {
     }),
   );
 
-  const importInput = h('input', { type: 'file', accept: '.zip,application/zip', hidden: true });
+  const importInput = h('input', { type: 'file', accept: '.zip,.json,.txt,application/zip,application/json,text/plain', hidden: true });
   importInput.addEventListener('change', async () => {
     const file = importInput.files[0];
     importInput.value = '';
     if (!file) return;
     try {
+      // A text file (notes, words or questions written elsewhere) instead of a backup? Import that.
+      const isZip = /\.zip$/i.test(file.name) || file.type === 'application/zip';
+      if (!isZip) {
+        const parsed = parseImport(await file.text());
+        toast('Adding… this can take a few seconds');
+        toast(importSummary(await applyImport(parsed)));
+        renderSettings(root, nav);
+        return;
+      }
       toast('Reading backup…');
       const { pages, total } = await importBackup(file);
       toast(`Restored ${pages} of ${total} notes`);
@@ -928,10 +937,27 @@ export async function renderSettings(root, nav) {
     const qInput = h('input', { class: 'sheet-input', type: 'text', maxlength: 140, placeholder: 'The question, e.g. “Do you remember the mountain?”', 'aria-label': 'Question' });
     const kInput = h('input', { class: 'sheet-input', type: 'text', maxlength: 300, placeholder: 'Key words, separated by commas', autocapitalize: 'off', autocomplete: 'off', 'aria-label': 'Key words' });
 
+    const offNote = h('p', { class: 'set-note', style: { marginTop: '6px' } }, 'The switch can be turned on once there is at least one question below.');
+    const fileIn = h('input', { type: 'file', accept: '.json,.txt,application/json,text/plain', hidden: true });
+    const status = h('span', { class: 'set-note', style: { margin: '0' } });
+    const addMany = async (text) => {
+      try {
+        const parsed = parseImport(text);
+        if (!parsed.questions.length) { toast('There are no questions in this text'); return; }
+        const hadNone = (await getGate()).questions.length === 0;
+        const n = await applyImport({ questions: parsed.questions }, (done, total) => { status.textContent = `Adding… ${done} of ${total}`; });
+        status.textContent = '';
+        toast(n.questions ? `Added ${n.questions} ${n.questions === 1 ? 'question' : 'questions'}${hadNone ? '. The journal now asks them.' : ''}` : 'You already have these questions');
+        draw();
+      } catch (err) { status.textContent = ''; ask({ title: 'Couldn’t add them', message: err.message, ok: 'OK', cancel: 'Close' }); }
+    };
+    fileIn.addEventListener('change', async () => { const f = fileIn.files[0]; fileIn.value = ''; if (f) addMany(await f.text()); });
+
     const draw = async () => {
       const gate = await getGate();
       toggle.checked = gate.enabled;
       toggle.disabled = !gate.questions.length;
+      offNote.hidden = gate.questions.length > 0;
       fill(list, gate.questions.length
         ? gate.questions.map((q) => h('div', { class: 'gate-item' },
           h('span', {}, h('strong', {}, q.text), h('small', {}, `${q.count || 'some'} key ${q.count === 1 ? 'word' : 'words'} (kept secret)`)),
@@ -944,6 +970,7 @@ export async function renderSettings(root, nav) {
     return [
       h('p', { class: 'set-note first' }, 'When the journal opens, it asks one of your questions. You answer in your own words, as short or as long as you like. It opens if your answer contains one of the key words. Capital letters, accents and punctuation don’t matter.'),
       h('label', { class: 'set-row' }, h('span', {}, 'Ask a question instead of the PIN'), toggle),
+      offNote,
       h('h4', { class: 'eyebrow sheet-label' }, 'Your questions'),
       list,
       h('h4', { class: 'eyebrow sheet-label' }, 'Add a question'),
@@ -963,9 +990,19 @@ export async function renderSettings(root, nav) {
           },
         }, 'Add question'),
       ),
+      h('h4', { class: 'eyebrow sheet-label' }, 'Add many at once'),
+      h('div', { class: 'import-actions' },
+        h('button', { class: 'link', onclick: () => pickFiles(fileIn) }, 'Choose a file with questions'),
+        h('button', { class: 'link', onclick: async () => { const t = await ask({ title: 'Paste the questions', message: 'Paste the whole text with the questions and key words.', input: '', placeholder: '{ "questions": [ … ] }', ok: 'Add' }); if (t) addMany(t); } }, 'Paste them'),
+      ),
+      fileIn, status,
       h('p', { class: 'set-note' }, 'Key words are stored scrambled and can’t be shown again, so remember them. The PIN always works too: tap “Use PIN instead” on the lock screen. A question is easier to guess than a PIN for someone who knows you, so choose key words only you would think of.'),
     ];
   });
+
+  const importSummary = (r) => (r.notes || r.words || r.collections || r.questions
+    ? `Added ${[r.notes ? `${r.notes} ${r.notes === 1 ? 'note' : 'notes'}` : null, r.collections ? `${r.collections} ${r.collections === 1 ? 'collection' : 'collections'}` : null, r.words ? `${r.words} ${r.words === 1 ? 'word' : 'words'}` : null, r.questions ? `${r.questions} ${r.questions === 1 ? 'question' : 'questions'}` : null].filter(Boolean).join(', ')}${r.skipped ? ` (${r.skipped} already there)` : ''}`
+    : 'Everything was already in your journal');
 
   // ----- import from ChatGPT (or any text in the same format) -----
   const openImport = () => sheet('Import from ChatGPT', (close) => {
@@ -999,12 +1036,15 @@ export async function renderSettings(root, nav) {
           ))) : null,
           h('button', {
             class: 'new-note slim import-go',
-            onclick: async () => {
-              const r = await applyImport(parsed);
+            onclick: async (e) => {
+              const button = e.currentTarget;
+              if (button.disabled) return;
+              button.disabled = true; // scrambling key words takes a few seconds: show that it is working
+              const label = button.querySelector('.new-note-text');
+              label.textContent = 'Adding…';
+              const r = await applyImport(parsed, (done, total) => { label.textContent = `Adding… ${done} of ${total}`; });
               close();
-              toast(r.notes || r.words || r.collections || r.questions
-                ? `Added ${[r.notes ? `${r.notes} ${r.notes === 1 ? 'note' : 'notes'}` : null, r.collections ? `${r.collections} ${r.collections === 1 ? 'collection' : 'collections'}` : null, r.words ? `${r.words} ${r.words === 1 ? 'word' : 'words'}` : null, r.questions ? `${r.questions} ${r.questions === 1 ? 'question' : 'questions'}` : null].filter(Boolean).join(', ')}${r.skipped ? ` (${r.skipped} already there)` : ''}`
-                : 'Everything was already in your journal');
+              toast(importSummary(r));
               window.dispatchEvent(new CustomEvent('notes-changed', { detail: {} }));
               renderSettings(root, nav);
             },

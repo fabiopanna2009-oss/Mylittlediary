@@ -164,7 +164,7 @@ export function toast(message) {
 // ask({ title, input: 'default text' })              -> Promise<string|null>
 export function ask({ title, message = '', ok = 'OK', cancel = 'Cancel', danger = false, input = null, placeholder = '' }) {
   return new Promise((resolve) => {
-    const field = input !== null ? h('input', { class: 'field', type: 'text', value: input, placeholder, maxlength: 60 }) : null;
+    const field = input !== null ? h('input', { class: 'field', type: 'text', value: input, placeholder, maxlength: 20000 }) : null;
     const close = (result) => {
       overlay.classList.remove('show');
       setTimeout(() => overlay.remove(), 200);

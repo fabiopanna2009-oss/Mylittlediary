@@ -60,9 +60,12 @@ async function checkPin(pin) {
 const normalize = (text) => String(text || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
   .replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, ' ').trim();
 
-async function hashWord(word, saltB64) {
+// How much work scrambling one key word takes. Kept moderate so adding many questions stays quick on a phone.
+const WORD_ROUNDS = 4000;
+
+async function hashWord(word, saltB64, rounds = WORD_ROUNDS) {
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(word), 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: fromB64(saltB64), iterations: 20000 }, key, 256);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: fromB64(saltB64), iterations: rounds }, key, 256);
   return toB64(bits);
 }
 
@@ -73,7 +76,7 @@ async function answerOpens(question, answer) {
   for (let i = 0; i < words.length; i++) for (let n = 1; n <= 4 && i + n <= words.length; n++) tries.add(words.slice(i, i + n).join(' '));
   tries.add(words.join('')); // also the answer written together
   for (const candidate of tries) {
-    if (question.hashes.includes(await hashWord(candidate, question.salt))) return true;
+    if (question.hashes.includes(await hashWord(candidate, question.salt, question.rounds || 20000))) return true;
   }
   return false;
 }
@@ -83,18 +86,34 @@ export async function getGate() {
   return gate && Array.isArray(gate.questions) ? gate : { enabled: false, questions: [] };
 }
 
-// Returns false if no usable key word was given.
-export async function addQuestion(text, keyWords) {
-  const words = [...new Set(keyWords.map(normalize).filter((w) => w.length >= 2))];
-  if (!text.trim() || !words.length) return false;
+// Adds several questions at once: [{ text, keywords: [...] }]. Questions you already have
+// (same wording) are skipped. `onProgress(done, total)` is called while the key words are scrambled.
+// Returns how many were added.
+export async function addQuestions(list, onProgress = null) {
   const gate = await getGate();
-  const salt = toB64(crypto.getRandomValues(new Uint8Array(16)));
-  const hashes = [];
-  for (const w of words) { hashes.push(await hashWord(w, salt)); hashes.push(await hashWord(w.replace(/ /g, ''), salt)); }
-  gate.questions.push({ id: toB64(crypto.getRandomValues(new Uint8Array(9))), text: text.trim().slice(0, 140), salt, hashes: [...new Set(hashes)], count: words.length });
-  await db.setSetting('gate', gate);
-  givesAway.clear();
-  return true;
+  const known = new Set(gate.questions.map((q) => q.text.trim().toLowerCase()));
+  let added = 0;
+  for (let i = 0; i < list.length; i++) {
+    const text = String(list[i].text || '').trim().slice(0, 140);
+    const words = [...new Set((list[i].keywords || []).map(normalize).filter((w) => w.length >= 2))];
+    if (text && words.length && !known.has(text.toLowerCase())) {
+      const salt = toB64(crypto.getRandomValues(new Uint8Array(16)));
+      const forms = [...new Set(words.flatMap((w) => [w, w.replace(/ /g, '')]))]; // "bus stop" and "busstop"
+      const hashes = [];
+      for (const form of forms) hashes.push(await hashWord(form, salt));
+      gate.questions.push({ id: toB64(crypto.getRandomValues(new Uint8Array(9))), text, salt, hashes, count: words.length, rounds: WORD_ROUNDS });
+      known.add(text.toLowerCase());
+      added++;
+    }
+    if (onProgress) onProgress(i + 1, list.length);
+  }
+  if (added) { await db.setSetting('gate', gate); givesAway.clear(); }
+  return added;
+}
+
+// One question. Returns false if nothing usable was given (or you already have it).
+export async function addQuestion(text, keyWords) {
+  return (await addQuestions([{ text, keywords: keyWords }])) === 1;
 }
 
 export async function removeQuestion(id) {

@@ -31,7 +31,7 @@
 import { db } from './db.js';
 import { uid } from './util.js';
 import { derive } from './notes.js';
-import { getGate, addQuestion, setGateEnabled } from './lock.js';
+import { getGate, addQuestions, setGateEnabled } from './lock.js';
 
 // The instructions you give ChatGPT once. They contain nothing personal.
 export const CHATGPT_INSTRUCTIONS = `I keep a private journal in an app called Little Memories. Whenever I say "export to Little Memories", turn what we talked about into notes for that app.
@@ -154,7 +154,7 @@ export function parseImport(pasted) {
 }
 
 // Save what was parsed. Returns how much was really added (things you already have are skipped).
-export async function applyImport({ notes, collections, words, questions = [] }) {
+export async function applyImport({ notes = [], collections = [], words = [], questions = [] }, onProgress = null) {
   const now = Date.now();
   const mine = await db.allCollections();
   const byName = new Map(mine.map((c) => [c.name.trim().toLowerCase(), c]));
@@ -204,13 +204,8 @@ export async function applyImport({ notes, collections, words, questions = [] })
   // If these are your first questions, the journal starts asking them (the PIN keeps working).
   let newQuestions = 0;
   if (questions.length) {
-    const gate = await getGate();
-    const hadNone = gate.questions.length === 0;
-    const known = new Set(gate.questions.map((q) => q.text.trim().toLowerCase()));
-    for (const q of questions) {
-      if (known.has(q.text.trim().toLowerCase())) continue;
-      if (await addQuestion(q.text, q.keywords)) { newQuestions++; known.add(q.text.trim().toLowerCase()); }
-    }
+    const hadNone = (await getGate()).questions.length === 0;
+    newQuestions = await addQuestions(questions, onProgress);
     if (hadNone && newQuestions) await setGateEnabled(true);
   }
 
