@@ -48,6 +48,98 @@ async function checkPin(pin) {
   return salt && hash && (await hashPin(pin, salt)) === hash;
 }
 
+// ---------- A question instead of the PIN ----------
+// You can let the journal ask you a question when it opens ("Who is she?").
+// You answer in your own words; it opens if your answer contains one of your key words.
+//
+// Stored on this device only:   gate = { enabled, questions: [{ id, text, salt, hashes: [...] }] }
+// The question text is readable (it is shown on the lock screen). The key words are NOT stored:
+// only a scrambled fingerprint of each one, like the PIN.
+
+// "It's Lulubär!" -> "its lulubar" : lower case, no accents, no punctuation
+const normalize = (text) => String(text || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, ' ').trim();
+
+async function hashWord(word, saltB64) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(word), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: fromB64(saltB64), iterations: 20000 }, key, 256);
+  return toB64(bits);
+}
+
+// Every word and every run of up to four words in the answer is tried against the key words.
+async function answerOpens(question, answer) {
+  const words = normalize(answer).split(' ').filter(Boolean).slice(0, 40);
+  const tries = new Set();
+  for (let i = 0; i < words.length; i++) for (let n = 1; n <= 4 && i + n <= words.length; n++) tries.add(words.slice(i, i + n).join(' '));
+  tries.add(words.join('')); // also the answer written together
+  for (const candidate of tries) {
+    if (question.hashes.includes(await hashWord(candidate, question.salt))) return true;
+  }
+  return false;
+}
+
+export async function getGate() {
+  const gate = await db.getSetting('gate', null);
+  return gate && Array.isArray(gate.questions) ? gate : { enabled: false, questions: [] };
+}
+
+// Returns false if no usable key word was given.
+export async function addQuestion(text, keyWords) {
+  const words = [...new Set(keyWords.map(normalize).filter((w) => w.length >= 2))];
+  if (!text.trim() || !words.length) return false;
+  const gate = await getGate();
+  const salt = toB64(crypto.getRandomValues(new Uint8Array(16)));
+  const hashes = [];
+  for (const w of words) { hashes.push(await hashWord(w, salt)); hashes.push(await hashWord(w.replace(/ /g, ''), salt)); }
+  gate.questions.push({ id: toB64(crypto.getRandomValues(new Uint8Array(9))), text: text.trim().slice(0, 140), salt, hashes: [...new Set(hashes)], count: words.length });
+  await db.setSetting('gate', gate);
+  givesAway.clear();
+  return true;
+}
+
+export async function removeQuestion(id) {
+  const gate = await getGate();
+  gate.questions = gate.questions.filter((q) => q.id !== id);
+  if (!gate.questions.length) gate.enabled = false;
+  await db.setSetting('gate', gate);
+}
+
+export async function setGateEnabled(on) {
+  const gate = await getGate();
+  gate.enabled = !!on && gate.questions.length > 0;
+  await db.setSetting('gate', gate);
+  return gate.enabled;
+}
+
+let currentQuestion = null;
+let lastQuestionId = null;
+
+function showQuestion(on) {
+  $('lock').classList.toggle('by-question', on);
+  $('btn-use-pin').hidden = !(on && currentQuestion);
+  $('btn-use-question').hidden = !(!on && currentQuestion && mode === 'unlock');
+  if (on) { setTitle(currentQuestion.text); $('lock-answer').value = ''; } else setTitle('Welcome back');
+}
+
+async function submitAnswer() {
+  const input = $('lock-answer');
+  if (!currentQuestion || !input.value.trim() || input.disabled) return;
+  input.disabled = true;
+  const ok = await answerOpens(currentQuestion, input.value);
+  input.disabled = false;
+  if (ok) {
+    wrongTries = 0;
+    input.blur();
+    unlock();
+    return;
+  }
+  wrongTries++;
+  const box = $('lock-question');
+  box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake');
+  if (wrongTries >= MAX_TRIES) waitBeforeRetry(); else setHint('Not quite. Try other words.');
+  input.select();
+}
+
 // ---------- Face ID (passkey) ----------
 export async function faceIdSupported() {
   try {
@@ -175,7 +267,7 @@ async function onDigit(key) {
 }
 
 function waitBeforeRetry() {
-  const keys = $('keypad').querySelectorAll('button');
+  const keys = [...$('keypad').querySelectorAll('button'), $('lock-answer'), $('btn-answer')];
   keys.forEach((k) => { k.disabled = true; });
   let left = WAIT_SECONDS;
   const tick = () => {
@@ -203,6 +295,7 @@ function unlock() {
 // are scattered at random spots and angles around the PIN pad, with the mountain along the bottom.
 // Photographs and your own drawings are never shown here, because this screen is visible before the PIN.
 let lockPageShown = false;
+const givesAway = new Map(); // word -> would it open the journal? (remembered while the app is open)
 async function drawLockPage() {
   const wide = window.innerWidth >= 900;
   const showWords = await db.getSetting('lockWords', true);
@@ -211,7 +304,23 @@ async function drawLockPage() {
     words = (await db.getSetting('words', '') || '').split('\n').map((w) => w.trim()).filter(Boolean);
     // until you have typed your own words, the names of your collections stand in
     if (!words.length) words = (await db.allCollections()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map((c) => c.name);
-    words = words.filter((w) => w.length <= 22).sort(() => Math.random() - 0.5).slice(0, wide ? 18 : 9);
+    words = words.filter((w) => w.length <= 22).sort(() => Math.random() - 0.5);
+    // Never show a word here that would open the journal: it would give the answer away.
+    const gate = await getGate();
+    if (gate.enabled) {
+      const safe = [];
+      for (const w of words) {
+        if (!givesAway.has(w)) {
+          let opens = false;
+          for (const q of gate.questions) { if (await answerOpens(q, w)) { opens = true; break; } }
+          givesAway.set(w, opens);
+        }
+        if (!givesAway.get(w)) safe.push(w);
+        if (safe.length >= (wide ? 18 : 9)) break;
+      }
+      words = safe;
+    }
+    words = words.slice(0, wide ? 18 : 9);
   }
   const names = Object.keys(DOODLES).sort(() => Math.random() - 0.5).slice(0, wide ? 7 : 4);
   const pieces = [
@@ -251,10 +360,20 @@ export async function lockNow() {
   $('lock').classList.add('show');
   $('lock-book').textContent = await db.getSetting('bookTitle', 'Little Memories') || 'Little Memories';
   $('lock-motto').textContent = await db.getSetting('motto', '') || '';
-  await drawLockPage();
   setMode((await db.getSetting('pinHash')) ? 'unlock' : 'setup');
   setHint('');
   $('btn-faceid').hidden = mode !== 'unlock' || !(await faceIdEnabled());
+
+  // a question instead of the PIN? pick one (not the same as last time, if there are several)
+  const gate = await getGate();
+  currentQuestion = null;
+  if (mode === 'unlock' && gate.enabled && gate.questions.length) {
+    const pool = gate.questions.length > 1 ? gate.questions.filter((q) => q.id !== lastQuestionId) : gate.questions;
+    currentQuestion = pool[Math.floor(Math.random() * pool.length)];
+    lastQuestionId = currentQuestion.id;
+  }
+  showQuestion(!!currentQuestion);
+  await drawLockPage(); // the words are scattered around whatever is shown in the middle
 }
 
 // Called from Settings → Change PIN. Resolves true when changed, false when cancelled.
@@ -264,6 +383,8 @@ export function changePin() {
     locked = true;
     $('lock').classList.add('show');
     $('btn-faceid').hidden = true;
+    currentQuestion = null;
+    showQuestion(false);
     setHint('');
     setMode('verify-old');
   });
@@ -280,9 +401,15 @@ export async function initLock(onUnlock) {
   // Typing on a real keyboard also works (handy when testing on a computer).
   document.addEventListener('keydown', (e) => {
     if (!$('lock').classList.contains('show')) return;
+    if (e.target === $('lock-answer')) { if (e.key === 'Enter') submitAnswer(); return; } // typing an answer, not a PIN
+    if ($('lock').classList.contains('by-question')) return;
     if (/^[0-9]$/.test(e.key)) onDigit(e.key);
     if (e.key === 'Backspace') onDigit('back');
   });
+
+  $('btn-answer').addEventListener('click', submitAnswer);
+  $('btn-use-pin').addEventListener('click', () => { showQuestion(false); setHint(''); drawLockPage(); });
+  $('btn-use-question').addEventListener('click', () => { showQuestion(true); setHint(''); drawLockPage(); });
 
   $('btn-faceid').addEventListener('click', tryFaceId);
 

@@ -18,10 +18,10 @@ import { photoImg, photoURL, addDrawingFromFile, forgetPhotoURL } from './photos
 import { ridge, wordScatter, doodle, DOODLES, placeRandomly } from './drawings.js';
 import { getTheme, setTheme } from './theme.js';
 import { CHATGPT_INSTRUCTIONS, parseImport, applyImport } from './importer.js';
-import { changePin, faceIdSupported, faceIdEnabled, enableFaceId, disableFaceId } from './lock.js';
+import { changePin, faceIdSupported, faceIdEnabled, enableFaceId, disableFaceId, getGate, addQuestion, removeQuestion, setGateEnabled } from './lock.js';
 import { createBackup, shareBackup, importBackup } from './backup.js';
 
-export const APP_VERSION = '4.12.0';
+export const APP_VERSION = '4.13.0';
 
 // ================= shared pieces =================
 
@@ -921,6 +921,52 @@ export async function renderSettings(root, nav) {
   });
   drawDrawings();
 
+  // ----- opening the journal with a question instead of the PIN -----
+  const openQuestions = () => sheet('A question at the door', () => {
+    const list = h('div', { class: 'gate-list' });
+    const toggle = h('input', { type: 'checkbox', class: 'switch', onchange: async (e) => { e.target.checked = await setGateEnabled(e.target.checked); toast(e.target.checked ? 'The journal now asks a question' : 'Back to the PIN'); } });
+    const qInput = h('input', { class: 'sheet-input', type: 'text', maxlength: 140, placeholder: 'The question, e.g. “Do you remember the mountain?”', 'aria-label': 'Question' });
+    const kInput = h('input', { class: 'sheet-input', type: 'text', maxlength: 300, placeholder: 'Key words, separated by commas', autocapitalize: 'off', autocomplete: 'off', 'aria-label': 'Key words' });
+
+    const draw = async () => {
+      const gate = await getGate();
+      toggle.checked = gate.enabled;
+      toggle.disabled = !gate.questions.length;
+      fill(list, gate.questions.length
+        ? gate.questions.map((q) => h('div', { class: 'gate-item' },
+          h('span', {}, h('strong', {}, q.text), h('small', {}, `${q.count || 'some'} key ${q.count === 1 ? 'word' : 'words'} (kept secret)`)),
+          h('button', { class: 'link quiet', onclick: async () => { await removeQuestion(q.id); draw(); } }, 'Remove'),
+        ))
+        : h('p', { class: 'set-note' }, 'No questions yet. Add one below.'));
+    };
+    draw();
+
+    return [
+      h('p', { class: 'set-note first' }, 'When the journal opens, it asks one of your questions. You answer in your own words, as short or as long as you like. It opens if your answer contains one of the key words. Capital letters, accents and punctuation don’t matter.'),
+      h('label', { class: 'set-row' }, h('span', {}, 'Ask a question instead of the PIN'), toggle),
+      h('h4', { class: 'eyebrow sheet-label' }, 'Your questions'),
+      list,
+      h('h4', { class: 'eyebrow sheet-label' }, 'Add a question'),
+      qInput, kInput,
+      h('div', { class: 'import-actions' },
+        h('span', { class: 'set-note', style: { margin: '0' } }, 'Any one key word opens it.'),
+        h('button', {
+          class: 'link',
+          onclick: async () => {
+            const ok = await addQuestion(qInput.value, kInput.value.split(','));
+            if (!ok) { toast('Write a question and at least one key word'); return; }
+            qInput.value = ''; kInput.value = '';
+            const gate = await getGate();
+            if (gate.questions.length === 1) await setGateEnabled(true); // the first question turns it on
+            draw();
+            toast('Question added');
+          },
+        }, 'Add question'),
+      ),
+      h('p', { class: 'set-note' }, 'Key words are stored scrambled and can’t be shown again, so remember them. The PIN always works too: tap “Use PIN instead” on the lock screen. A question is easier to guess than a PIN for someone who knows you, so choose key words only you would think of.'),
+    ];
+  });
+
   // ----- import from ChatGPT (or any text in the same format) -----
   const openImport = () => sheet('Import from ChatGPT', (close) => {
     const box = h('textarea', { class: 'sheet-input import-box', rows: 7, placeholder: 'Paste ChatGPT’s answer here', 'aria-label': 'Text to import', spellcheck: false });
@@ -1032,6 +1078,7 @@ export async function renderSettings(root, nav) {
       h('p', { class: 'set-note' }, 'Pen sketches of moments: holding hands, a dance, falling asleep on a shoulder. Draw them yourself or have them drawn, as dark lines on a white background. They appear in the opening and on the first page, and stay only on this device.'),
       h('p', { class: 'set-note' }, 'One per line: single words, or whole sentences. After the PIN, the journal opens with them popping up across the page, together with your places, photographs and lines from your notes, different each time (tap to skip). Your words are also scribbled across the first page, between small drawings and a spiral of your photographs. Everything here is saved only on this device: the line appears under the title, and the date is marked at the top of the mountain.'),
       group('Privacy',
+        h('button', { class: 'set-row', onclick: openQuestions }, h('span', {}, 'Open with a question'), icon('chevron')),
         h('button', { class: 'set-row', onclick: async () => { if (await changePin()) toast('PIN changed'); } }, h('span', {}, 'Change PIN'), icon('chevron')),
         faceIdRow,
         h('label', { class: 'set-row' },

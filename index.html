@@ -60,6 +60,11 @@
       <p id="lock-motto" class="lock-motto"></p>
       <h1 id="lock-title" class="lock-title">Welcome back</h1>
       <p id="lock-hint" class="lock-hint">&nbsp;</p>
+      <!-- shown instead of the PIN pad when you chose to open the journal with a question -->
+      <div id="lock-question" class="lock-question">
+        <input id="lock-answer" class="lock-answer" type="text" placeholder="Answer in your own words" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" aria-label="Your answer">
+        <button id="btn-answer" class="lock-open">Open</button>
+      </div>
       <div id="pin-dots" class="pin-dots" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
       <div class="keypad" id="keypad">
         <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
@@ -70,6 +75,8 @@
         <button data-key="back" class="key-plain" aria-label="Delete">Delete</button>
       </div>
       <div class="lock-alt">
+        <button id="btn-use-pin" hidden>Use PIN instead</button>
+        <button id="btn-use-question" hidden>Answer the question</button>
         <button id="btn-faceid" hidden>Use Face ID</button>
         <button id="btn-lock-cancel" hidden>Cancel</button>
       </div>

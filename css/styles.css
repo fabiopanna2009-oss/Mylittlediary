@@ -986,6 +986,35 @@ a.note-meta-item:active { opacity: 0.6; }
   .lock-ridge .ridge svg { height: 26vh; }
 }
 
+/* opening the journal with a question instead of the PIN */
+.lock-question { display: none; margin: 18px auto 0; width: min(100%, 340px); }
+.lock.by-question .lock-question { display: block; }
+.lock.by-question .pin-dots, .lock.by-question .keypad { display: none; }
+.lock.by-question .lock-title { font-family: var(--hand-title); font-size: 46px; line-height: 1; color: var(--pen); margin-top: 22px; }
+.lock.by-question .lock-inner { max-width: 440px; }
+.lock.by-question .lock-hint { min-height: 1.5em; margin-top: 8px; }
+.lock-answer {
+  display: block;
+  width: 100%;
+  padding: 10px 4px;
+  border: 0;
+  border-bottom: 1.5px solid var(--rule-strong);
+  border-radius: 0;
+  background: transparent;
+  text-align: center;
+  font-family: var(--hand);
+  font-size: 23px;
+  color: var(--ink);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.lock-answer:focus { border-bottom-color: var(--pen); }
+.lock-open { display: block; margin: 20px auto 0; padding: 11px 34px; border-radius: 4px; background: var(--walnut); color: var(--on-walnut); font-family: var(--hand); font-size: 20px; }
+.lock-open:active { opacity: 0.85; }
+.lock-question.shake { animation: shake 0.36s; }
+@media (min-width: 900px) { .lock.by-question .lock-title { font-size: 60px; } }
+
 /* the opening: plays once after the PIN */
 .opening {
   position: fixed;
@@ -1095,6 +1124,14 @@ img.drawing { opacity: 0.92; }
 .doodle, .doodle:nth-of-type(4n) { width: 30px; height: 30px; }
 .home-collage { margin-top: 30px; }
 .spiral { max-width: 360px; margin-top: 16px; }
+
+/* questions at the door (Settings) */
+.gate-item { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--rule); }
+.gate-item strong { display: block; font-family: var(--hand); font-size: 19px; font-weight: 700; color: var(--pen); overflow-wrap: anywhere; }
+.gate-item small { display: block; font-size: 13px; color: var(--ink-3); }
+.gate-list { border-top: 1px solid var(--rule-strong); }
+.set-note.first { margin-top: 0; margin-bottom: 8px; }
+.sheet .sheet-input + .sheet-input { margin-top: 6px; }
 
 /* import from ChatGPT */
 .import-steps { margin: 4px 0 14px; padding-left: 20px; font-size: 14.5px; line-height: 1.6; color: var(--ink-2); }
