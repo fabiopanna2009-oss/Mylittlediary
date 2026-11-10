@@ -21,7 +21,7 @@ import { CHATGPT_INSTRUCTIONS, parseImport, applyImport } from './importer.js';
 import { changePin, faceIdSupported, faceIdEnabled, enableFaceId, disableFaceId, getGate, addQuestion, removeQuestion, setGateEnabled } from './lock.js';
 import { createBackup, shareBackup, importBackup } from './backup.js';
 
-export const APP_VERSION = '4.17.3';
+export const APP_VERSION = '4.18.0';
 
 // ================= shared pieces =================
 
@@ -173,6 +173,24 @@ async function createCollection() {
   return c;
 }
 
+// The pictures a setting points to, without any that are no longer on this device.
+async function presentPhotos(key) {
+  const ids = await db.getSetting(key, []) || [];
+  const have = new Set(await db.photoIds());
+  const present = ids.filter((id) => have.has(id));
+  if (present.length !== ids.length) await db.setSetting(key, present);
+  return present;
+}
+
+// The recording you keep, or nothing if its file is no longer on this device.
+async function presentKeepsake() {
+  const k = await db.getSetting('keepsake', null);
+  if (!k?.id) return null;
+  if (await db.getPhoto(k.id)) return k;
+  await db.setSetting('keepsake', null);
+  return null;
+}
+
 // ================= HOME =================
 
 export async function renderHome(root, nav, { intro = false } = {}) {
@@ -184,7 +202,7 @@ export async function renderHome(root, nav, { intro = false } = {}) {
   const hasOwnWords = !!(await db.getSetting('words', '') || '').trim();
   const words = (await wordsThatMatter()).filter((w) => w.length <= 22).slice(0, 24); // sentences are kept for the opening
   // the photographs you chose for the first page (Settings) come first, then the ones in your notes
-  const frontPhotos = (await db.getSetting('frontPhotos', []) || []).map((photoId) => ({ photoId, caption: '', date: '' }));
+  const frontPhotos = (await presentPhotos('frontPhotos')).map((photoId) => ({ photoId, caption: '', date: '' }));
   const chosen = new Set(frontPhotos.map((p) => p.photoId));
   const photos = [...frontPhotos, ...[...notes].sort((a, b) => b.createdAt - a.createdAt)
     .flatMap((n) => (n.photos || []).map((p) => ({ ...p, note: n, when: p.date || iso(n.createdAt) })))
@@ -299,7 +317,7 @@ export async function playOpening({ force = false } = {}) {
 
   const drawingIds = await db.getSetting('drawings', []) || [];
   // the photographs you chose for the first page come first; photographs from notes fill the rest
-  const front = (await db.getSetting('frontPhotos', []) || []).map((photoId) => ({ photoId }));
+  const front = (await presentPhotos('frontPhotos')).map((photoId) => ({ photoId }));
   const photoCount = big ? 6 : 4;
   const pick = (list, n) => shuffled(list).slice(0, n);
   const items = [
@@ -386,7 +404,7 @@ export async function playOpening({ force = false } = {}) {
 // A quiet page for when it hits: the one recording you keep, and a way to write it down straight away.
 
 export async function renderMoment(root, nav) {
-  const keepsake = await db.getSetting('keepsake', null);
+  const keepsake = await presentKeepsake();
   const collections = await db.allCollections();
   const miss = collections.find((c) => /miss/i.test(c.name)); // e.g. "Things I miss"
   let player = null;
@@ -945,7 +963,7 @@ export async function renderSettings(root, nav) {
   const keepBox = h('div', { class: 'set-list' });
   const keepInput = h('input', { type: 'file', accept: 'audio/*,.opus,.ogg,.oga,.m4a,.mp3,.wav,.aac,.caf,.amr', hidden: true });
   const drawKeep = async () => {
-    const k = await db.getSetting('keepsake', null);
+    const k = await presentKeepsake();
     if (!k?.id) {
       fill(keepBox, h('button', { class: 'set-row', onclick: () => pickFiles(keepInput) }, h('span', {}, 'Add the recording'), icon('chevron')));
       return;
@@ -979,7 +997,7 @@ export async function renderSettings(root, nav) {
   drawKeep();
 
   // ----- photographs for the first page and the opening -----
-  let frontPhotos = await db.getSetting('frontPhotos', []) || [];
+  let frontPhotos = await presentPhotos('frontPhotos');
   const frontGrid = h('div', { class: 'drawing-grid front-grid' });
   const frontInput = h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
   const drawFront = () => fill(frontGrid,
@@ -1002,7 +1020,7 @@ export async function renderSettings(root, nav) {
     if (files.length) toast('Adding…');
     let failed = 0;
     for (const file of files) {
-      try { frontPhotos = [...frontPhotos, await addPhotoFromFile(file)]; await db.setSetting('frontPhotos', frontPhotos); } catch { failed += 1; }
+      try { frontPhotos = [...frontPhotos, await addPhotoFromFile(file, true)]; await db.setSetting('frontPhotos', frontPhotos); } catch { failed += 1; }
       drawFront();
     }
     if (files.length) toast(failed ? `${failed} couldn’t be added` : 'Added');

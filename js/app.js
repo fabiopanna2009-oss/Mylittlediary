@@ -22,7 +22,6 @@ import {
   renderHome, renderNotes, renderMemories, renderPhotos, renderCollection, renderSearch, renderSettings, openNotePhoto,
   renderSidebar, renderListPane, renderNotesPlaceholder, playOpening, renderMoment,
 } from './views.js';
-import { cleanUpUnusedPhotos } from './photos.js';
 
 const root = document.getElementById('app');
 const tabbar = document.getElementById('tabbar');
@@ -220,7 +219,8 @@ async function start() {
     else route();
   });
 
-  cleanUpUnusedPhotos();
+  // Unused photographs are only cleaned up after a note is closed or deleted (see editor.js),
+  // never when the app starts.
 
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     navigator.serviceWorker.register('sw.js').catch(() => {});

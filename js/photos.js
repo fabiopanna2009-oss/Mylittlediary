@@ -33,10 +33,11 @@ export async function makeThumb(blob) {
 }
 
 // Save a picture from the photo picker. Returns the new photo id.
-export async function addPhotoFromFile(file) {
+// keep = true marks a picture that belongs to the journal itself (not to a note): it is never cleaned up.
+export async function addPhotoFromFile(file, keep = false) {
   const id = uid();
   const thumb = await makeThumb(file);
-  await db.savePhoto({ id, blob: file, thumb, type: file.type || 'image/jpeg', createdAt: Date.now() });
+  await db.savePhoto({ id, blob: file, thumb, type: file.type || 'image/jpeg', createdAt: Date.now(), ...(keep ? { keep: true } : {}) });
   return id;
 }
 
@@ -147,6 +148,10 @@ export async function cleanUpUnusedPhotos() {
   if (keepsake?.id) used.add(keepsake.id); // the one recording you keep
   for (const id of photoIds) {
     if (!used.has(id)) {
+      // Only pictures that were added to a note are ever removed: anything marked 'keep', anything that
+      // is not a photograph (the recording), and anything added in the last day is left alone.
+      const p = await db.getPhoto(id);
+      if (!p || p.keep || !(p.type || '').startsWith('image/') || Date.now() - (p.createdAt || 0) < 86400000) continue;
       forgetPhotoURL(id);
       await db.deletePhoto(id);
     }
