@@ -14,14 +14,14 @@ import {
   pickFiles, pauseAutoLock, resumeAutoLock,
 } from './util.js';
 import { noteTitle, noteExcerpt, noteWhen } from './notes.js';
-import { photoImg, photoURL, addDrawingFromFile, forgetPhotoURL } from './photos.js';
+import { photoImg, photoURL, addDrawingFromFile, forgetPhotoURL, saveKeepsake, removeKeepsake } from './photos.js';
 import { ridge, wordScatter, doodle, DOODLES, placeRandomly } from './drawings.js';
 import { getTheme, setTheme } from './theme.js';
 import { CHATGPT_INSTRUCTIONS, parseImport, applyImport } from './importer.js';
 import { changePin, faceIdSupported, faceIdEnabled, enableFaceId, disableFaceId, getGate, addQuestion, removeQuestion, setGateEnabled } from './lock.js';
 import { createBackup, shareBackup, importBackup } from './backup.js';
 
-export const APP_VERSION = '4.15.0';
+export const APP_VERSION = '4.16.0';
 
 // ================= shared pieces =================
 
@@ -252,6 +252,7 @@ export async function renderHome(root, nav, { intro = false } = {}) {
       ),
     ),
     h('div', { class: 'home-grid' }, main, collage, memories),
+    h('button', { class: 'moment-door', onclick: () => nav.go('moment') }, 'For the heavy moments', icon('arrow')),
     needsBackup ? h('button', { class: 'backup-note', onclick: () => nav.go('settings') },
       h('span', {}, lastBackup ? 'It’s been a while since your last backup.' : 'You haven’t made a backup yet.'),
       h('span', {}, 'Back up now'),
@@ -373,6 +374,40 @@ export async function playOpening({ force = false } = {}) {
       timer = setTimeout(finish, (0.35 + shown.length * step + 3) * 1000);
     });
   });
+}
+
+// ================= FOR THE HEAVY MOMENTS =================
+// A quiet page for when it hits: the one recording you keep, and a way to write it down straight away.
+
+export async function renderMoment(root, nav) {
+  const keepsake = await db.getSetting('keepsake', null);
+  const collections = await db.allCollections();
+  const miss = collections.find((c) => /miss/i.test(c.name)); // e.g. "Things I miss"
+  let player = null;
+  if (keepsake?.id) {
+    player = h('audio', { class: 'moment-audio', controls: true, preload: 'metadata' });
+    const url = await photoURL(keepsake.id, 'full');
+    if (url) player.src = url;
+  }
+
+  fill(root,
+    bar(nav),
+    h('main', { class: 'screen enter moment' },
+      h('p', { class: 'moment-line' }, 'Breathe. You are allowed to miss her.'),
+      player ? h('section', { class: 'moment-keep' },
+        h('div', { class: 'eyebrow' }, keepsake.label || 'The recording you keep'),
+        player,
+        h('p', { class: 'set-note' }, 'It only plays when you press play.'),
+      ) : h('section', { class: 'moment-keep empty' },
+        h('p', { class: 'set-note' }, 'You can keep one recording here, for example a voice message. Add it under Settings → A voice to keep.'),
+      ),
+      h('button', { class: 'new-note', onclick: () => nav.compose(miss?.id || null) },
+        h('span', { class: 'new-note-text' }, 'Write what you feel'),
+        icon('compose'),
+      ),
+      miss ? h('p', { class: 'set-note center' }, `It will be kept in “${miss.name}”.`) : null,
+    ),
+  );
 }
 
 // ================= NOTES =================
@@ -900,6 +935,43 @@ export async function renderSettings(root, nav) {
       onchange: async (e) => { await db.setSetting(key, e.target.value.trim()); toast('Saved'); window.dispatchEvent(new CustomEvent('notes-changed', { detail: {} })); },
     }));
   const dateText = h('span', { class: 'set-value' }, specialDate ? fmt.medium(specialDate) : 'Choose');
+  // ----- the one recording you keep -----
+  const keepBox = h('div', { class: 'set-list' });
+  const keepInput = h('input', { type: 'file', accept: 'audio/*,.opus,.ogg,.oga,.m4a,.mp3,.wav,.aac,.caf,.amr', hidden: true });
+  const drawKeep = async () => {
+    const k = await db.getSetting('keepsake', null);
+    if (!k?.id) {
+      fill(keepBox, h('button', { class: 'set-row', onclick: () => pickFiles(keepInput) }, h('span', {}, 'Add the recording'), icon('chevron')));
+      return;
+    }
+    const audio = h('audio', { class: 'keep-audio', controls: true, preload: 'metadata' });
+    photoURL(k.id, 'full').then((url) => { if (url) audio.src = url; });
+    fill(keepBox,
+      h('label', { class: 'set-row' }, h('span', {}, 'What is it?'),
+        h('input', { class: 'set-input', type: 'text', value: k.label || '', placeholder: 'A few words, only for you', maxlength: 60, onchange: async (e) => { await db.setSetting('keepsake', { ...k, label: e.target.value.trim() }); toast('Saved'); } })),
+      h('div', { class: 'set-row static keep-row' }, audio),
+      h('button', { class: 'set-row', onclick: () => pickFiles(keepInput) }, h('span', {}, 'Replace it with another file'), icon('chevron')),
+      h('button', {
+        class: 'set-row',
+        onclick: async () => {
+          if (!await ask({ title: 'Remove the recording?', message: 'It will be deleted from the journal. Make sure you still have the original file somewhere else.', ok: 'Remove', danger: true })) return;
+          await removeKeepsake();
+          drawKeep();
+        },
+      }, h('span', { class: 'danger-text' }, 'Remove it from the journal')),
+    );
+  };
+  keepInput.addEventListener('change', async () => {
+    const file = keepInput.files[0];
+    keepInput.value = '';
+    if (!file) return;
+    if (await db.getSetting('keepsake', null) && !await ask({ title: 'Replace the recording?', message: 'The one in the journal now will be deleted from the journal.', ok: 'Replace', danger: true })) return;
+    if (!await saveKeepsake(file)) { ask({ title: 'This isn’t a recording', message: `“${file.name}” is not an audio file the journal can keep. Voice messages saved from WhatsApp (.opus, .m4a, .ogg, .mp3) work.`, ok: 'OK', cancel: 'Close' }); return; }
+    toast('Kept safe');
+    drawKeep();
+  });
+  drawKeep();
+
   // ----- your own drawings -----
   let drawings = await db.getSetting('drawings', []) || [];
   const drawingGrid = h('div', { class: 'drawing-grid' });
@@ -1115,6 +1187,12 @@ export async function renderSettings(root, nav) {
           onchange: async (e) => { await db.setSetting('words', e.target.value); toast('Saved'); },
         }),
       ),
+      h('section', { class: 'set-group' },
+        h('h2', { class: 'eyebrow' }, 'A voice to keep'),
+        keepBox,
+        keepInput,
+      ),
+      h('p', { class: 'set-note' }, 'One recording, for example a voice message saved from WhatsApp. It is kept exactly as it is and can be played on the page “For the heavy moments”. It stays only on this device and is included in your backups. Keep the original file somewhere safe as well.'),
       h('section', { class: 'set-group' },
         h('h2', { class: 'eyebrow' }, 'Your drawings'),
         drawingGrid,

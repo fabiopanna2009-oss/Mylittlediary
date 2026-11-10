@@ -131,17 +131,21 @@ async function readZip(blob) {
 }
 
 // ---------- Export ----------
-const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/heic': 'heic', 'image/webp': 'webp', 'image/gif': 'gif' };
+const EXT = {
+  'image/jpeg': 'jpg', 'image/png': 'png', 'image/heic': 'heic', 'image/webp': 'webp', 'image/gif': 'gif',
+  'audio/ogg': 'ogg', 'audio/mp4': 'm4a', 'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/aac': 'aac', 'audio/webm': 'weba', 'audio/x-caf': 'caf', 'audio/amr': 'amr',
+};
+const extFor = (p) => ((p.type || '').includes('opus') ? 'opus' : (EXT[(p.type || '').split(';')[0].trim()] || 'jpg'));
 
 export async function createBackup() {
-  const [entries, collections, photos, bookTitle, noteSort, motto, specialDate, specialLabel, words, drawings] = await Promise.all([
+  const [entries, collections, photos, bookTitle, noteSort, motto, specialDate, specialLabel, words, drawings, keepsake] = await Promise.all([
     db.allEntries(), db.allCollections(), db.allPhotos(),
-    db.getSetting('bookTitle'), db.getSetting('noteSort'), db.getSetting('motto'), db.getSetting('specialDate'), db.getSetting('specialLabel'), db.getSetting('words'), db.getSetting('drawings', []),
+    db.getSetting('bookTitle'), db.getSetting('noteSort'), db.getSetting('motto'), db.getSetting('specialDate'), db.getSetting('specialLabel'), db.getSetting('words'), db.getSetting('drawings', []), db.getSetting('keepsake', null),
   ]);
 
   const photoFiles = photos.map((p) => ({
     id: p.id,
-    file: `photos/${p.id}.${EXT[p.type] || 'jpg'}`,
+    file: `photos/${p.id}.${extFor(p)}`,
     type: p.type,
     createdAt: p.createdAt,
     blob: p.blob,
@@ -151,7 +155,7 @@ export async function createBackup() {
     app: 'little-memories',
     format: 2,
     exportedAt: new Date().toISOString(),
-    settings: { bookTitle, noteSort, motto, specialDate, specialLabel, words, drawings },
+    settings: { bookTitle, noteSort, motto, specialDate, specialLabel, words, drawings, keepsake },
     collections,
     entries,
     photos: photoFiles.map(({ blob, ...info }) => info),
@@ -235,7 +239,10 @@ export async function importBackup(file) {
     const blob = files.get(info.file);
     if (!blob) continue;
     const typed = new Blob([blob], { type: info.type || 'image/jpeg' });
-    const thumb = await makeThumb(typed);
+    // small preview copies are only made for photographs (not for the recording or for drawings)
+    let thumb = null;
+    if (typed.type === 'image/png') thumb = typed;
+    else if (typed.type.startsWith('image/')) { try { thumb = await makeThumb(typed); } catch { thumb = null; } }
     forgetPhotoURL(info.id);
     await db.savePhoto({ id: info.id, blob: typed, thumb, type: typed.type, createdAt: info.createdAt || Date.now() });
   }
@@ -247,6 +254,8 @@ export async function importBackup(file) {
     const value = diary.settings?.[key];
     if (value && !(await db.getSetting(key))) await db.setSetting(key, value);
   }
+  // The one recording you keep: restored if this device has none.
+  if (diary.settings?.keepsake?.id && !(await db.getSetting('keepsake', null))) await db.setSetting('keepsake', diary.settings.keepsake);
   // Your own drawings from the backup are added to the ones on this device.
   if (Array.isArray(diary.settings?.drawings) && diary.settings.drawings.length) {
     const mineDrawings = await db.getSetting('drawings', []) || [];

@@ -69,6 +69,33 @@ export async function addDrawingFromFile(file) {
   return id;
 }
 
+// ---------- the one recording you keep ----------
+// A single audio file (for example a voice message) kept for the heavy moments.
+// Stored on this device only:   keepsake = { id, label, name, addedAt }   (the audio itself is in `photos`)
+// Phones often hand over audio without saying what it is (WhatsApp voice messages are ".opus"),
+// so the type is worked out from the file name.
+const AUDIO_TYPES = { opus: 'audio/ogg; codecs=opus', ogg: 'audio/ogg', oga: 'audio/ogg', m4a: 'audio/mp4', mp3: 'audio/mpeg', wav: 'audio/wav', aac: 'audio/aac', caf: 'audio/x-caf', amr: 'audio/amr', weba: 'audio/webm', mp4: 'audio/mp4' };
+
+// Saves the recording (replacing an earlier one). Returns false if the file is not audio.
+export async function saveKeepsake(file) {
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  const type = file.type && file.type.startsWith('audio/') ? file.type : AUDIO_TYPES[ext];
+  if (!type) return false;
+  const old = await db.getSetting('keepsake', null);
+  const id = uid();
+  // the file is kept exactly as it is; only its type label is added if it was missing
+  await db.savePhoto({ id, blob: new Blob([file], { type }), thumb: null, type, createdAt: Date.now() });
+  await db.setSetting('keepsake', { id, label: old?.label || '', name: file.name, addedAt: Date.now() });
+  if (old?.id) { forgetPhotoURL(old.id); await db.deletePhoto(old.id); }
+  return true;
+}
+
+export async function removeKeepsake() {
+  const old = await db.getSetting('keepsake', null);
+  await db.setSetting('keepsake', null);
+  if (old?.id) { forgetPhotoURL(old.id); await db.deletePhoto(old.id); }
+}
+
 // Object URLs let an <img> show a picture stored in the database.
 // We remember them so the same picture isn't loaded twice.
 const urlCache = new Map();
@@ -115,6 +142,8 @@ export async function cleanUpUnusedPhotos() {
   });
   collections.forEach((c) => { if (c.coverPhotoId) used.add(c.coverPhotoId); });
   (await db.getSetting('drawings', []) || []).forEach((id) => used.add(id)); // your own drawings (Settings)
+  const keepsake = await db.getSetting('keepsake', null);
+  if (keepsake?.id) used.add(keepsake.id); // the one recording you keep
   for (const id of photoIds) {
     if (!used.has(id)) {
       forgetPhotoURL(id);

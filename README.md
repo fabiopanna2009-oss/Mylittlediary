@@ -25,6 +25,7 @@ The simplicity of Apple Notes with the feeling of opening your own school notebo
 - **Search** titles, the words inside notes, collection names and photo captions, with an optional month filter.
 - **Private.** Locked with a PIN or Face ID, and it locks every time you leave the app.
 - **A question at the door.** Instead of the PIN, the journal can ask one of your own questions. You answer in your own words; it opens if the answer contains one of your key words (stored scrambled, never in this code). The PIN always works as a fallback, and words that would open the journal are never shown on the lock screen.
+- **For the heavy moments.** One quiet page, reached from the first page: a single recording you keep (added in Settings → *A voice to keep*, for example a voice message), which only plays when you press play, and a button to write down what you feel. The recording is stored untouched and travels with your backups.
 - **Backups.** Export everything (notes + original photos) as one `.zip` file and restore it on any phone.
 - **Dark by default** (the notebook under a desk lamp), with Light or "Follow my device" in Settings, and **offline** use.
 

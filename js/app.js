@@ -20,7 +20,7 @@ import { initLock, lockNow, isLocked } from './lock.js';
 import { renderEditor, closeEditor, saveCurrent } from './editor.js';
 import {
   renderHome, renderNotes, renderMemories, renderPhotos, renderCollection, renderSearch, renderSettings, openNotePhoto,
-  renderSidebar, renderListPane, renderNotesPlaceholder, playOpening,
+  renderSidebar, renderListPane, renderNotesPlaceholder, playOpening, renderMoment,
 } from './views.js';
 import { cleanUpUnusedPhotos } from './photos.js';
 
@@ -126,6 +126,7 @@ function draw(name, id, params) {
     case 'search': return renderSearch(root, nav);
     case 'collection': return renderCollection(root, nav, id);
     case 'settings': return renderSettings(root, nav);
+    case 'moment': return renderMoment(root, nav);
     case 'note':
     case 'new':
       editorOpen = true;
