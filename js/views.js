@@ -14,14 +14,14 @@ import {
   pickFiles, pauseAutoLock, resumeAutoLock,
 } from './util.js';
 import { noteTitle, noteExcerpt, noteWhen } from './notes.js';
-import { photoImg, photoURL, addDrawingFromFile, forgetPhotoURL, saveKeepsake, removeKeepsake } from './photos.js';
+import { photoImg, photoURL, addPhotoFromFile, addDrawingFromFile, forgetPhotoURL, saveKeepsake, removeKeepsake } from './photos.js';
 import { ridge, wordScatter, doodle, DOODLES, placeRandomly } from './drawings.js';
 import { getTheme, setTheme } from './theme.js';
 import { CHATGPT_INSTRUCTIONS, parseImport, applyImport } from './importer.js';
 import { changePin, faceIdSupported, faceIdEnabled, enableFaceId, disableFaceId, getGate, addQuestion, removeQuestion, setGateEnabled } from './lock.js';
 import { createBackup, shareBackup, importBackup } from './backup.js';
 
-export const APP_VERSION = '4.16.0';
+export const APP_VERSION = '4.17.0';
 
 // ================= shared pieces =================
 
@@ -112,42 +112,31 @@ function monthGroups(notes, nav, dateKey) {
   ));
 }
 
-// ---------- the first page: a spiral of photographs (words and drawings live in drawings.js) ----------
-
-// Photographs winding inwards along a spiral. The newest is on the outside.
-function photoSpiral(items, nav, collections) {
-  const shown = items.slice(0, 18);
-  const size = 100; // everything is placed in percent, so the spiral scales with the page
-  const spiral = h('div', { class: 'spiral' });
-  spiral.innerHTML = `<svg class="spiral-line" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="0.35" stroke-linecap="round" aria-hidden="true"><path pathLength="1" d="${spiralPath()}"/></svg>`;
-  shown.forEach((it, i) => {
-    const t = shown.length > 1 ? i / (shown.length - 1) : 0;
-    const angle = -1.3 + t * 3.6 * Math.PI;            // how far around
-    const radius = 41 - t * 31;                          // how far from the middle
-    const w = 25 - t * 10;                               // outer photos are larger
-    const x = size / 2 + Math.cos(angle) * radius;
-    const y = size / 2 + Math.sin(angle) * radius;
-    spiral.append(h('button', {
-      class: 'spiral-photo',
-      'aria-label': it.caption || 'Photograph',
-      style: { left: `${x}%`, top: `${y}%`, width: `${w}%`, '--tilt': `${((i * 53) % 19) - 9}deg`, '--i': String(i), zIndex: String(shown.length - i) },
-      onclick: () => openLightbox(shown, i, nav, collections),
-    }, photoImg(it.photoId, 'thumb')));
-  });
-  if (!shown.length) spiral.append(h('span', { class: 'spiral-empty' }, 'your photographs will wind in here'));
-  return spiral;
-}
-
-function spiralPath() {
-  const pts = [];
-  for (let k = 0; k <= 120; k++) {
-    const t = k / 120;
-    const angle = -1.3 + t * 3.6 * Math.PI;
-    const radius = 44 - t * 37;
-    pts.push(`${k ? 'L' : 'M'}${(50 + Math.cos(angle) * radius).toFixed(2)} ${(50 + Math.sin(angle) * radius).toFixed(2)}`);
+// ---------- the first page: your photographs, taped in under the title ----------
+function photoStrip(items, nav, collections) {
+  const shown = items.slice(0, 5);
+  if (!shown.length) {
+    return h('button', { class: 'strip-empty', onclick: () => nav.go('settings') }, 'Add photographs for this page', icon('arrow'));
   }
-  return pts.join(' ');
+  return h('div', { class: `strip strip-${shown.length}` }, shown.map((it, i) => h('button', {
+    class: 'strip-photo', 'aria-label': it.caption || 'Photograph',
+    style: { '--tilt': `${[-5, 3, -2, 5, -4][i]}deg`, '--i': String(i) },
+    onclick: () => openLightbox(items, i, nav, collections),
+  }, photoImg(it.photoId, 'thumb'))));
 }
+
+// A small pen drawing for the corner of the page: a bench under a lamp, and a few stars.
+function cornerSketch() {
+  const el = h('div', { class: 'corner-sketch', 'aria-hidden': 'true' });
+  el.innerHTML = `<svg viewBox="0 0 200 150" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M150 138V40c0-9 5-14 13-14h9"/><path d="M168 26h14l-3 12h-9z"/><path class="glow" d="M170 44l-3 9M176 45v10M182 44l3 9"/>
+    <path d="M34 100h92M36 88h88M38 76h84"/><path d="M40 76l-4 34M120 76l4 34"/><path d="M26 112h108"/><path d="M36 112l-5 26M124 112l5 26"/>
+    <path d="M10 139c30-3 60 2 96-1s60 1 86-1"/>
+    <path class="glow" d="M48 30l2 6 6 1-5 4 2 6-5-4-5 4 2-6-5-4 6-1z"/><path class="glow" d="M96 14l1 4 4 1-3 2 1 4-3-2-3 2 1-4-3-2 4-1z"/><path class="glow" d="M22 58v6M19 61h6M118 44v6M115 47h6"/>
+  </svg>`;
+  return el;
+}
+
 
 // A collection as an entrance: a meaningful word you tap.
 function wordEntrance(c, notes, nav, extra = null) {
@@ -186,8 +175,12 @@ export async function renderHome(root, nav, { intro = false } = {}) {
   const homeDrawings = (await db.getSetting('drawings', []) || []).slice(0, 4);
   const hasOwnWords = !!(await db.getSetting('words', '') || '').trim();
   const words = (await wordsThatMatter()).filter((w) => w.length <= 22).slice(0, 24); // sentences are kept for the opening
-  const photos = [...notes].sort((a, b) => b.createdAt - a.createdAt)
-    .flatMap((n) => (n.photos || []).map((p) => ({ ...p, note: n, when: p.date || iso(n.createdAt) })));
+  // the photographs you chose for the first page (Settings) come first, then the ones in your notes
+  const frontPhotos = (await db.getSetting('frontPhotos', []) || []).map((photoId) => ({ photoId, caption: '', date: '' }));
+  const chosen = new Set(frontPhotos.map((p) => p.photoId));
+  const photos = [...frontPhotos, ...[...notes].sort((a, b) => b.createdAt - a.createdAt)
+    .flatMap((n) => (n.photos || []).map((p) => ({ ...p, note: n, when: p.date || iso(n.createdAt) })))
+    .filter((p) => !chosen.has(p.photoId))];
   const now = new Date();
   const isTheDay = specialDate && specialDate.slice(5) === todayISO(now).slice(5);
   const ridgeLabel = specialDate ? [fmt.dots(specialDate).slice(0, 5), specialLabel].filter(Boolean).join(' · ') : '';
@@ -199,7 +192,12 @@ export async function renderHome(root, nav, { intro = false } = {}) {
     h('p', { class: 'home-greeting' }, isTheDay ? `Today is ${specialLabel || 'the day'}.` : greeting(now)),
     h('h1', { class: 'display home-title' }, bookTitle || 'Little Memories'),
     motto ? h('p', { class: 'home-motto' }, motto) : null,
-    ridge(ridgeLabel),
+    ridgeLabel ? h('p', { class: 'home-date' }, ridgeLabel) : null,
+    photoStrip(photos, nav, collections),
+    photos.length ? h('div', { class: 'strip-links' },
+      textLink(frontPhotos.length ? 'Edit' : 'Choose yours', () => nav.go('settings')),
+      photos.length > frontPhotos.length ? textLink('All photographs', () => nav.tab('photos'), { arrow: true }) : null,
+    ) : null,
 
     h('button', { class: 'new-note', onclick: () => nav.compose() },
       h('span', { class: 'new-note-text' }, 'New note'),
@@ -218,19 +216,16 @@ export async function renderHome(root, nav, { intro = false } = {}) {
     ),
   );
 
-  // The page of scribbles: your words, drawings, and the spiral of photographs.
+  // The page of scribbles: your words, and a small drawing in the corner.
   const collage = h('div', { class: 'home-collage' },
     h('div', { class: 'block-label' },
       h('h2', { class: 'eyebrow' }, 'Words that matter'),
       textLink(hasOwnWords ? 'Edit' : 'Add yours', () => nav.go('settings')),
     ),
     wordScatter(words),
-    homeDrawings.length ? h('div', { class: 'drawing-row' }, homeDrawings.map((id) => photoImg(id, 'full', 'drawing'))) : null,
-    h('div', { class: 'block-label', style: { marginTop: '26px' } },
-      h('h2', { class: 'eyebrow' }, 'Photographs'),
-      photos.length ? textLink('All', () => nav.tab('photos'), { arrow: true }) : null,
-    ),
-    photoSpiral(photos, nav, collections),
+    homeDrawings.length
+      ? h('div', { class: 'corner-own' }, homeDrawings.slice(0, 2).map((id) => photoImg(id, 'full', 'drawing')))
+      : cornerSketch(),
   );
 
   const memories = h('section', { class: 'section home-memories' },
@@ -295,6 +290,9 @@ export async function playOpening({ force = false } = {}) {
   const photos = notes.flatMap((n) => (n.photos || []).map((p) => ({ ...p, note: n })));
 
   const drawingIds = await db.getSetting('drawings', []) || [];
+  // the photographs you chose for the first page come first; photographs from notes fill the rest
+  const front = (await db.getSetting('frontPhotos', []) || []).map((photoId) => ({ photoId }));
+  const photoCount = big ? 6 : 4;
   const pick = (list, n) => shuffled(list).slice(0, n);
   const items = [
     ...pick(drawingIds, big ? 4 : 2).map((id) => ({ kind: 'drawing', id })),
@@ -304,7 +302,7 @@ export async function playOpening({ force = false } = {}) {
     // your special date, unless it is already among your words
     ...(specialDate && !typed.some((w) => w.includes(fmt.dots(specialDate).slice(0, 5))) ? [{ kind: 'word', text: [fmt.dots(specialDate).slice(0, 5), specialLabel].filter(Boolean).join(' · ') }] : []),
     ...(motto ? [{ kind: 'line', text: motto }] : []),
-    ...pick(photos, big ? 6 : 4).map((photo) => ({ kind: 'photo', photo })),
+    ...[...pick(front, photoCount), ...pick(photos, photoCount)].slice(0, photoCount).map((photo) => ({ kind: 'photo', photo })),
   ];
   // a few drawings between them
   const doodleNames = pick(Object.keys(DOODLES), drawingIds.length ? 2 : Math.max(2, Math.round(items.length / 4)));
@@ -713,7 +711,7 @@ export function openLightbox(items, startIndex, nav, collections = []) {
     fill(foot,
       item.caption ? h('p', { class: 'lightbox-caption' }, item.caption) : null,
       h('div', { class: 'lightbox-meta' },
-        h('span', { class: 'caption-date' }, fmt.medium(item.date || item.when || iso(item.note.createdAt))),
+        (item.date || item.when || item.note) ? h('span', { class: 'caption-date' }, fmt.medium(item.date || item.when || iso(item.note.createdAt))) : null,
         item.note ? h('button', { onclick: () => { close(); nav.open(item.note.id); } }, `${noteTitle(item.note)} →`) : null,
       ),
       cols.length ? h('p', { class: 'lightbox-cols' }, 'In ', cols.flatMap((c, i) => [
@@ -972,6 +970,37 @@ export async function renderSettings(root, nav) {
   });
   drawKeep();
 
+  // ----- photographs for the first page and the opening -----
+  let frontPhotos = await db.getSetting('frontPhotos', []) || [];
+  const frontGrid = h('div', { class: 'drawing-grid front-grid' });
+  const frontInput = h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
+  const drawFront = () => fill(frontGrid,
+    frontPhotos.map((id) => h('button', {
+      class: 'drawing-tile', 'aria-label': 'Remove this photograph',
+      onclick: async () => {
+        if (!await ask({ title: 'Remove this photograph?', message: 'It is taken off the first page and the opening. Photographs inside your notes are not touched.', ok: 'Remove', danger: true })) return;
+        frontPhotos = frontPhotos.filter((x) => x !== id);
+        await db.setSetting('frontPhotos', frontPhotos);
+        forgetPhotoURL(id);
+        await db.deletePhoto(id);
+        drawFront();
+      },
+    }, photoImg(id, 'thumb'))),
+    h('button', { class: 'drawing-tile add', onclick: () => pickFiles(frontInput) }, '+ Add'),
+  );
+  frontInput.addEventListener('change', async () => {
+    const files = [...frontInput.files];
+    frontInput.value = '';
+    if (files.length) toast('Adding…');
+    let failed = 0;
+    for (const file of files) {
+      try { frontPhotos = [...frontPhotos, await addPhotoFromFile(file)]; await db.setSetting('frontPhotos', frontPhotos); } catch { failed += 1; }
+      drawFront();
+    }
+    if (files.length) toast(failed ? `${failed} couldn’t be added` : 'Added');
+  });
+  drawFront();
+
   // ----- your own drawings -----
   let drawings = await db.getSetting('drawings', []) || [];
   const drawingGrid = h('div', { class: 'drawing-grid' });
@@ -1194,12 +1223,18 @@ export async function renderSettings(root, nav) {
       ),
       h('p', { class: 'set-note' }, 'One recording, for example a voice message saved from WhatsApp. It is kept exactly as it is and can be played on the page “For the heavy moments”. It stays only on this device and is included in your backups. Keep the original file somewhere safe as well.'),
       h('section', { class: 'set-group' },
+        h('h2', { class: 'eyebrow' }, 'Photographs for the first page'),
+        frontGrid,
+        frontInput,
+      ),
+      h('p', { class: 'set-note' }, 'These appear on the first page and pop up in the opening after the PIN, a different mix each time. They are kept exactly as they are and never shown on the lock screen. Tap one to remove it.'),
+      h('section', { class: 'set-group' },
         h('h2', { class: 'eyebrow' }, 'Your drawings'),
         drawingGrid,
         drawingInput,
       ),
       h('p', { class: 'set-note' }, 'Pen sketches of moments: holding hands, a dance, falling asleep on a shoulder. Draw them yourself or have them drawn, as dark lines on a white background. They appear in the opening and on the first page, and stay only on this device.'),
-      h('p', { class: 'set-note' }, 'One per line: single words, or whole sentences. After the PIN, the journal opens with them popping up across the page, together with your places, photographs and lines from your notes, different each time (tap to skip). Your words are also scribbled across the first page, between small drawings and a spiral of your photographs. Everything here is saved only on this device: the line appears under the title, and the date is marked at the top of the mountain.'),
+      h('p', { class: 'set-note' }, 'One per line: single words, or whole sentences. After the PIN, the journal opens with them popping up across the page, together with your places, photographs and lines from your notes, different each time (tap to skip). Your words are also scribbled across the first page, between small drawings. Everything here is saved only on this device: the line and the date appear under the title.'),
       group('Privacy',
         h('button', { class: 'set-row', onclick: openQuestions }, h('span', {}, 'Open with a question'), icon('chevron')),
         h('button', { class: 'set-row', onclick: async () => { if (await changePin()) toast('PIN changed'); } }, h('span', {}, 'Change PIN'), icon('chevron')),

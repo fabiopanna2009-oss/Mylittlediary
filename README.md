@@ -4,7 +4,7 @@ The simplicity of Apple Notes with the feeling of opening your own school notebo
 
 **The look comes from real things:** squared notebook paper with a red margin line, titles handwritten in hazel-brown ink, a dark brown hoodie, peach iced tea, and a mountain ridge drawn across the first page. Photographs are taped in.
 
-**Make it yours** (in Settings): your own title, a line under the title, a date that matters (marked at the top of the mountain), and *words that matter*: nicknames, phrases, places. They are scribbled across the first page between small pen drawings and a spiral of your photographs, and the page writes itself in when you open the journal. All of this is saved only on your device, never in this code.
+**Make it yours** (in Settings): your own title, a line under the title, a date that matters (written under the title), and *words that matter*: nicknames, phrases, places. They are scribbled across the first page between small pen drawings. Under the title sit your photographs, taped in: the ones you choose in Settings (*Photographs for the first page*) first, then the ones from your notes. A small pen drawing, or your own, closes the page. All of this is saved only on your device, never in this code.
 
 **The opening.** After the PIN, your words, sentences, places and photographs pop up one after another all over the page, each at its own angle, together with lines from your notes. A different mix each time, each piece at its own random spot (tap to skip, replay or turn it off in Settings).
 

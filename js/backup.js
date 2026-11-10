@@ -138,9 +138,9 @@ const EXT = {
 const extFor = (p) => ((p.type || '').includes('opus') ? 'opus' : (EXT[(p.type || '').split(';')[0].trim()] || 'jpg'));
 
 export async function createBackup() {
-  const [entries, collections, photos, bookTitle, noteSort, motto, specialDate, specialLabel, words, drawings, keepsake] = await Promise.all([
+  const [entries, collections, photos, bookTitle, noteSort, motto, specialDate, specialLabel, words, drawings, keepsake, frontPhotos] = await Promise.all([
     db.allEntries(), db.allCollections(), db.allPhotos(),
-    db.getSetting('bookTitle'), db.getSetting('noteSort'), db.getSetting('motto'), db.getSetting('specialDate'), db.getSetting('specialLabel'), db.getSetting('words'), db.getSetting('drawings', []), db.getSetting('keepsake', null),
+    db.getSetting('bookTitle'), db.getSetting('noteSort'), db.getSetting('motto'), db.getSetting('specialDate'), db.getSetting('specialLabel'), db.getSetting('words'), db.getSetting('drawings', []), db.getSetting('keepsake', null), db.getSetting('frontPhotos', []),
   ]);
 
   const photoFiles = photos.map((p) => ({
@@ -155,7 +155,7 @@ export async function createBackup() {
     app: 'little-memories',
     format: 2,
     exportedAt: new Date().toISOString(),
-    settings: { bookTitle, noteSort, motto, specialDate, specialLabel, words, drawings, keepsake },
+    settings: { bookTitle, noteSort, motto, specialDate, specialLabel, words, drawings, keepsake, frontPhotos },
     collections,
     entries,
     photos: photoFiles.map(({ blob, ...info }) => info),
@@ -260,6 +260,11 @@ export async function importBackup(file) {
   if (Array.isArray(diary.settings?.drawings) && diary.settings.drawings.length) {
     const mineDrawings = await db.getSetting('drawings', []) || [];
     await db.setSetting('drawings', [...new Set([...mineDrawings, ...diary.settings.drawings])]);
+  }
+  // The photographs for the first page are added to the ones on this device too.
+  if (Array.isArray(diary.settings?.frontPhotos) && diary.settings.frontPhotos.length) {
+    const mineFront = await db.getSetting('frontPhotos', []) || [];
+    await db.setSetting('frontPhotos', [...new Set([...mineFront, ...diary.settings.frontPhotos])]);
   }
   // Words and sentences are added to the ones you already have (no duplicates).
   if (diary.settings?.words) {

@@ -142,6 +142,7 @@ export async function cleanUpUnusedPhotos() {
   });
   collections.forEach((c) => { if (c.coverPhotoId) used.add(c.coverPhotoId); });
   (await db.getSetting('drawings', []) || []).forEach((id) => used.add(id)); // your own drawings (Settings)
+  (await db.getSetting('frontPhotos', []) || []).forEach((id) => used.add(id)); // photographs for the first page (Settings)
   const keepsake = await db.getSetting('keepsake', null);
   if (keepsake?.id) used.add(keepsake.id); // the one recording you keep
   for (const id of photoIds) {
