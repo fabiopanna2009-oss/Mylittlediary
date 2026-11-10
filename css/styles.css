@@ -57,30 +57,29 @@
 
 :root[data-font="book"] { --write: var(--hand); }
 
-/* at night: the same notebook under a desk lamp */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #1f1813;
-    --grid: rgba(215, 200, 175, 0.05);
-    --margin: rgba(224, 120, 110, 0.32);
-    --paper-deep: #2a2019;
-    --sheet: #2b211a;
-    --mat: #efe7da;
-    --ink: #f1e7d8;
-    --ink-2: #cdbca8;
-    --ink-3: #96846f;
-    --pen: #dfc296;
-    --rule: rgba(241, 231, 216, 0.11);
-    --rule-strong: rgba(241, 231, 216, 0.2);
-    --walnut: #e0a659;
-    --caramel: #dba25c;
-    --gold: #e8b56a;
-    --hazel: #b7946a;
-    --tape: rgba(210, 186, 138, 0.5);
-    --danger: #ea8f7c;
-    --on-walnut: #231913;
-    color-scheme: dark;
-  }
+/* Dark: the same notebook under a desk lamp. This is the default look.
+   js/theme.js puts data-theme="dark" or "light" on <html> (your choice in Settings). */
+:root[data-theme="dark"] {
+  --paper: #1d1612;
+  --grid: rgba(215, 200, 175, 0.06);
+  --margin: rgba(224, 120, 110, 0.32);
+  --paper-deep: #2a2019;
+  --sheet: #2b211a;
+  --mat: #e9dfd0;
+  --ink: #f1e7d8;
+  --ink-2: #cdbca8;
+  --ink-3: #96846f;
+  --pen: #dfc296;
+  --rule: rgba(241, 231, 216, 0.11);
+  --rule-strong: rgba(241, 231, 216, 0.2);
+  --walnut: #e0a659;
+  --caramel: #dba25c;
+  --gold: #e8b56a;
+  --hazel: #b7946a;
+  --tape: rgba(210, 186, 138, 0.5);
+  --danger: #ea8f7c;
+  --on-walnut: #231913;
+  color-scheme: dark;
 }
 
 /* ---------- 2. Base ---------- */
@@ -904,9 +903,7 @@ a.note-meta-item:active { opacity: 0.6; }
   background: transparent url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'><path d='M3.5 9.5l3.6 4.2c1.8-4.6 4.4-8.4 8.2-11.4' fill='none' stroke='%236a4a2c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/></svg>") center / 118% no-repeat;
   border-color: var(--pen);
 }
-@media (prefers-color-scheme: dark) {
-  .note-body ul.checklist > li[data-checked="true"]::before { filter: brightness(2.6) saturate(0.6); }
-}
+:root[data-theme="dark"] .note-body ul.checklist > li[data-checked="true"]::before { filter: brightness(2.6) saturate(0.6); }
 .pin-mark, .row-pin { color: var(--gold); }
 .switch:checked { background: var(--pen); }
 .cal-day.selected .cal-num { background: var(--pen); }

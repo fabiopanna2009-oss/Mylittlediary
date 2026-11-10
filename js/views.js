@@ -16,10 +16,11 @@ import {
 import { noteTitle, noteExcerpt, noteWhen } from './notes.js';
 import { photoImg, photoURL } from './photos.js';
 import { ridge, wordScatter } from './drawings.js';
+import { getTheme, setTheme } from './theme.js';
 import { changePin, faceIdSupported, faceIdEnabled, enableFaceId, disableFaceId } from './lock.js';
 import { createBackup, shareBackup, importBackup } from './backup.js';
 
-export const APP_VERSION = '4.5.0';
+export const APP_VERSION = '4.6.0';
 
 // ================= shared pieces =================
 
@@ -849,6 +850,12 @@ export async function renderSettings(root, nav) {
             oninput: async (e) => { await db.setSetting('specialDate', e.target.value); dateText.textContent = e.target.value ? fmt.medium(e.target.value) : 'Choose'; toast('Saved'); },
           })),
         textRow('What that day is', 'specialLabel', specialLabel, 'A word or two'),
+        h('label', { class: 'set-row' }, h('span', {}, 'Appearance'),
+          h('select', { class: 'set-select', onchange: (e) => setTheme(e.target.value) },
+            h('option', { value: 'dark', selected: getTheme() === 'dark' }, 'Dark'),
+            h('option', { value: 'light', selected: getTheme() === 'light' }, 'Light'),
+            h('option', { value: 'auto', selected: getTheme() === 'auto' }, 'Follow my device'),
+          )),
         h('label', { class: 'set-row' }, h('span', {}, 'Writing font'), fontSelect),
         h('label', { class: 'set-row' },
           h('span', {}, 'Play memories when opening'),

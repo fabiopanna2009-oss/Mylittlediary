@@ -23,7 +23,7 @@ The simplicity of Apple Notes with the feeling of opening your own school notebo
 - **Search** titles, the words inside notes, collection names and photo captions, with an optional month filter.
 - **Private.** Locked with a PIN or Face ID, and it locks every time you leave the app.
 - **Backups.** Export everything (notes + original photos) as one `.zip` file and restore it on any phone.
-- **Warm dark mode** and **offline** use.
+- **Dark by default** (the notebook under a desk lamp), with Light or "Follow my device" in Settings, and **offline** use.
 
 **On a computer** (install it from Chrome or Edge via the install icon in the address bar) the journal shows three panes like Apple Notes on a Mac: sidebar with your collections, the list of notes, and the note you are writing. On large screens the note's details (collections, when, where, song) sit beside it, and the first page becomes a double page. Shortcuts: `Alt+N` new note, `Ctrl+K` search, `Ctrl+B` bold, `Ctrl+Shift+L` lock. Notes are stored separately on each device; move them with *Export backup* / *Restore from a backup*.
 

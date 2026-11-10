@@ -11,6 +11,7 @@
 //   #/new           a new note   (#/new?c=ID puts it in a collection)
 //   #/settings
 
+import './theme.js';
 import { db } from './db.js';
 import { uid, autoLockPaused } from './util.js';
 import { STARTER_COLLECTIONS } from './content.js';
