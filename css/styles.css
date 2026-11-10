@@ -906,6 +906,10 @@ body[data-tabbar="on"] .tabbar { display: flex; }
 .editor { position: relative; padding-left: calc(var(--gutter) + var(--safe-left) + 12px); }
 .editor::before { content: ""; position: absolute; top: 0; bottom: 0; left: calc(var(--safe-left) + 18px); width: 1px; background: var(--margin); }
 .note-date { color: var(--ink-3); }
+.note-meta { display: flex; flex-wrap: wrap; gap: 2px 18px; margin-top: 2px; }
+.note-meta-item { font-family: var(--hand); font-size: 16px; color: var(--caramel); text-decoration: none; }
+a.note-meta-item:active { opacity: 0.6; }
+.sheet .set-input { font-size: 16px; }
 .note-body { caret-color: var(--pen); }
 .note-body li::marker { color: var(--pen); }
 .note-body ul.checklist > li::before { border: 1.6px solid var(--pen); border-radius: 3px 5px 4px 6px; top: 0.34em; }

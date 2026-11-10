@@ -202,9 +202,26 @@ export async function importBackup(file) {
   }
 
   // Collections first, so notes from an older backup can be sorted into them.
-  const myCollections = new Set((await db.allCollections()).map((c) => c.id));
-  await db.saveCollections((diary.collections || []).filter((c) => !myCollections.has(c.id)));
-  const incoming = await upgradeAll(diary.entries); // backups from older versions are upgraded to notes
+  // A collection with the same name as one you already have is treated as the same collection.
+  const mine = await db.allCollections();
+  const byName = new Map(mine.map((c) => [c.name.trim().toLowerCase(), c]));
+  const myIds = new Set(mine.map((c) => c.id));
+  const sameAs = new Map(); // id in the backup -> id on this device
+  const toSave = [];
+  let order = mine.length ? Math.max(...mine.map((c) => c.order ?? 0)) + 1 : 0;
+  for (const c of diary.collections || []) {
+    if (myIds.has(c.id)) continue;
+    const twin = byName.get((c.name || '').trim().toLowerCase());
+    if (twin) {
+      sameAs.set(c.id, twin.id);
+      if (!twin.description && c.description) { twin.description = c.description; toSave.push(twin); }
+    } else {
+      toSave.push({ ...c, order: order++ });
+    }
+  }
+  await db.saveCollections(toSave);
+  const incoming = (await upgradeAll(diary.entries)) // backups from older versions are upgraded to notes
+    .map((n) => ({ ...n, collections: [...new Set((n.collections || []).map((id) => sameAs.get(id) || id))] }));
 
   const existing = new Map((await db.allEntries()).map((e) => [e.id, e]));
   const newer = incoming.filter((e) => {

@@ -7,7 +7,7 @@
 
 import { db } from './db.js';
 import { h, icon, debounce, toast, ask, sheet, fmt, todayISO, pickFiles, uid } from './util.js';
-import { derive, newNote, isNoteEmpty } from './notes.js';
+import { derive, newNote, isNoteEmpty, noteWhen } from './notes.js';
 import { addPhotoFromFile, photoImg, cleanUpUnusedPhotos } from './photos.js';
 
 let current = null;       // the note being edited (+ _saved: is it in the database yet?)
@@ -279,20 +279,40 @@ export async function renderEditor(root, { id, collection, onDone, openPhoto }) 
       pinRow.addEventListener('click', () => { current.pinned = !current.pinned; pinMark.hidden = !current.pinned; drawPin(); changed(); });
       drawPin();
 
+      // ----- when: exact, roughly, or unknown; optionally in your own words -----
       const dateText = h('span', { class: 'set-value' }, fmt.medium(todayISO(new Date(current.createdAt))));
       const dateRow = h('label', { class: 'set-row has-input' }, h('span', {}, 'Date'), dateText,
         h('input', {
-          type: 'date', value: todayISO(new Date(current.createdAt)), 'aria-label': 'Date of this note',
+          type: 'date', value: todayISO(new Date(current.createdAt)), 'aria-label': 'Date of this memory',
           oninput: (e) => {
             if (!e.target.value) return;
             const [y, m, d] = e.target.value.split('-').map(Number);
             const old = new Date(current.createdAt);
             current.createdAt = new Date(y, m - 1, d, old.getHours(), old.getMinutes()).getTime();
             dateText.textContent = fmt.medium(e.target.value);
-            dateLine.textContent = fmt.long(e.target.value);
-            changed();
+            drawMeta(); changed();
           },
         }));
+      const kindRow = h('label', { class: 'set-row' }, h('span', {}, 'How sure is the date?'),
+        h('select', { class: 'set-select', onchange: (e) => { current.dateKind = e.target.value; drawMeta(); changed(); } },
+          h('option', { value: 'exact', selected: (current.dateKind || 'exact') === 'exact' }, 'Exactly that day'),
+          h('option', { value: 'around', selected: current.dateKind === 'around' }, 'Around then'),
+          h('option', { value: 'unknown', selected: current.dateKind === 'unknown' }, 'I don’t know when'),
+        ));
+      const field = (label, value, placeholder, onInput, type = 'text') => h('label', { class: 'set-row' }, h('span', {}, label),
+        h('input', { class: 'set-input', type, value: value || '', placeholder, maxlength: 300, autocapitalize: type === 'url' ? 'off' : null, oninput: (e) => { onInput(e.target.value.trim()); drawMeta(); changed(); } }));
+      const wordsRow = field('In my words', current.dateWords, 'e.g. the last Friday before summer', (v) => { current.dateWords = v; });
+
+      // ----- where, and the song that belongs to it -----
+      const setPart = (key, part, v) => { current[key] = { ...(current[key] || {}), [part]: v }; if (!current[key].name && !current[key].title && !current[key].url) current[key] = null; };
+      const placeRows = [
+        field('Place', current.place?.name, 'Where it happened', (v) => setPart('place', 'name', v)),
+        field('Map link', current.place?.url, 'Paste a Google Maps link', (v) => setPart('place', 'url', v), 'url'),
+      ];
+      const songRows = [
+        field('Song', current.song?.title, 'A song that belongs to this', (v) => setPart('song', 'title', v)),
+        field('Song link', current.song?.url, 'Paste a link (optional)', (v) => setPart('song', 'url', v), 'url'),
+      ];
 
       const tags = h('div', { class: 'tags' });
       const drawTags = () => tags.replaceChildren(
@@ -319,9 +339,15 @@ export async function renderEditor(root, { id, collection, onDone, openPhoto }) 
       drawTags();
 
       return [
-        h('div', { class: 'set-list' }, pinRow, dateRow),
+        h('div', { class: 'set-list' }, pinRow),
         h('h4', { class: 'eyebrow sheet-label' }, 'Collections'),
         tags,
+        h('h4', { class: 'eyebrow sheet-label' }, 'When'),
+        h('div', { class: 'set-list' }, dateRow, kindRow, wordsRow),
+        h('h4', { class: 'eyebrow sheet-label' }, 'Where'),
+        h('div', { class: 'set-list' }, placeRows),
+        h('h4', { class: 'eyebrow sheet-label' }, 'Song'),
+        h('div', { class: 'set-list' }, songRows),
         h('button', {
           class: 'danger-btn',
           onclick: async () => {
@@ -369,7 +395,24 @@ export async function renderEditor(root, { id, collection, onDone, openPhoto }) 
     cleanup = () => {};
   };
 
-  const dateLine = h('div', { class: 'eyebrow note-date' }, fmt.long(todayISO(new Date(current.createdAt))));
+  // The quiet lines above the title: when, where, and the song.
+  const dateLine = h('div', { class: 'eyebrow note-date' });
+  const metaLine = h('div', { class: 'note-meta' });
+  const safeLink = (url) => (/^https?:\/\//i.test(url || '') ? url : null);
+  const metaItem = (prefix, text, url) => {
+    if (!text && !safeLink(url)) return null;
+    const label = `${prefix} ${text || 'link'}`;
+    return safeLink(url)
+      ? h('a', { class: 'note-meta-item', href: safeLink(url), target: '_blank', rel: 'noopener noreferrer' }, label, ' ↗')
+      : h('span', { class: 'note-meta-item' }, label);
+  };
+  function drawMeta() {
+    dateLine.textContent = noteWhen(current);
+    const items = [metaItem('at', current.place?.name, current.place?.url), metaItem('♪', current.song?.title, current.song?.url)].filter(Boolean);
+    metaLine.replaceChildren(...items);
+    metaLine.hidden = !items.length;
+  }
+  drawMeta();
 
   root.replaceChildren(
     h('header', { class: 'bar' },
@@ -377,7 +420,7 @@ export async function renderEditor(root, { id, collection, onDone, openPhoto }) 
       h('div', { class: 'bar-title' }, h('span', { class: 'save-state', id: 'save-status' }, '')),
       h('div', { class: 'bar-actions' }, pinMark, moreBtn),
     ),
-    h('main', { class: 'screen editor enter' }, dateLine, titleEl, bodyEl, fileInput),
+    h('main', { class: 'screen editor enter' }, dateLine, metaLine, titleEl, bodyEl, fileInput),
     toolbar,
   );
 

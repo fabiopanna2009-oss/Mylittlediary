@@ -13,6 +13,8 @@ The simplicity of Apple Notes with the feeling of opening your own school notebo
 - **Write immediately.** Tap *New note* (or the pen in the bottom bar) and start typing. No templates, no forms. Notes save by themselves.
 - **Simple formatting.** Headings, bold, lists and checklists from a small toolbar above the keyboard.
 - **Photographs inside notes.** Placed where your cursor is, between paragraphs, with an optional caption and date. Your original photos are kept untouched: no filters, no cropping.
+- **Honest dates.** A memory can be dated exactly, "around then", or "I don't know when", optionally in your own words. Undated notes gather under *Sometime*.
+- **Places and songs.** Add where it happened (with a map link) and a song that belongs to it; both are searchable.
 - **Pin** important notes, **sort** by last edited or date created, **delete** from the note's "…" menu.
 - **Memories.** Collections are meaningful words you tap, like *The little things* or *Unspoken words*. Create, rename, describe, reorder and delete them, and choose a cover photograph. A note can be in several collections, or in none.
 - **Photographs.** One gallery of every picture; open one to see its note and collections.

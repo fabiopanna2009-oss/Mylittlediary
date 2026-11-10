@@ -13,12 +13,12 @@ import {
   h, fill, icon, fmt, todayISO, friendlyDate, greeting, toast, ask, sheet, formatBytes, uid,
   pickFiles, pauseAutoLock, resumeAutoLock,
 } from './util.js';
-import { noteTitle, noteExcerpt } from './notes.js';
+import { noteTitle, noteExcerpt, noteWhen } from './notes.js';
 import { photoImg, photoURL } from './photos.js';
 import { changePin, faceIdSupported, faceIdEnabled, enableFaceId, disableFaceId } from './lock.js';
 import { createBackup, shareBackup, importBackup } from './backup.js';
 
-export const APP_VERSION = '4.0.0';
+export const APP_VERSION = '4.1.0';
 
 // ================= shared pieces =================
 
@@ -56,6 +56,13 @@ function shortDate(ms) {
   return d.slice(0, 4) === today.slice(0, 4) ? fmt.medium(d).replace(/ \d{4}$/, '') : fmt.medium(d);
 }
 
+// The date of the memory itself, as honest as the note says it is.
+function rowWhen(n) {
+  if (n.dateKind === 'unknown') return n.dateWords?.trim() || 'undated';
+  if (n.dateKind === 'around') return n.dateWords?.trim() || `~ ${new Date(n.createdAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}`;
+  return shortDate(n.createdAt);
+}
+
 // On a computer the note list stays visible next to the editor; this is the note that is open.
 let activeNoteId = null;
 
@@ -68,7 +75,7 @@ function noteRow(n, nav, dateKey = 'updatedAt') {
       h('span', { class: 'note-row-body' },
         h('span', { class: 'note-row-title' }, n.pinned ? icon('pin', 'row-pin') : null, noteTitle(n)),
         h('span', { class: 'note-row-sub' },
-          h('span', { class: 'note-row-date' }, shortDate(n[dateKey])),
+          h('span', { class: 'note-row-date' }, dateKey === 'createdAt' ? rowWhen(n) : shortDate(n[dateKey])),
           excerpt ? h('span', { class: 'note-row-text' }, excerpt) : (photo ? h('span', { class: 'note-row-text' }, plural(n.photos.length, 'photograph', 'photographs')) : null),
         ),
       ),
@@ -83,17 +90,19 @@ function noteList(notes, nav, dateKey) {
 
 // Notes grouped by month (newest first).
 function monthGroups(notes, nav, dateKey) {
-  const sorted = [...notes].sort((a, b) => b[dateKey] - a[dateKey]);
+  // When sorting by the date of the memory, notes without a known date are gathered at the end.
+  const undated = (n) => dateKey === 'createdAt' && n.dateKind === 'unknown';
+  const sorted = [...notes].sort((a, b) => (undated(a) - undated(b)) || (b[dateKey] - a[dateKey]));
   const groups = [];
   for (const n of sorted) {
-    const key = iso(n[dateKey]).slice(0, 7);
+    const key = undated(n) ? 'unknown' : iso(n[dateKey]).slice(0, 7);
     let g = groups[groups.length - 1];
     if (!g || g.key !== key) { g = { key, items: [] }; groups.push(g); }
     g.items.push(n);
   }
   return groups.map((g) => h('section', { class: 'month' },
     h('div', { class: 'month-head' },
-      h('h2', { class: 'month-name' }, fmt.monthYear(`${g.key}-01`)),
+      h('h2', { class: 'month-name' }, g.key === 'unknown' ? 'Sometime' : fmt.monthYear(`${g.key}-01`)),
       h('span', { class: 'month-count' }, g.items.length),
     ),
     noteList(g.items, nav, dateKey),
@@ -211,7 +220,7 @@ export async function renderNotes(root, nav) {
   const sortBtn = h('button', { class: 'link quiet sort' });
 
   function draw() {
-    sortBtn.textContent = sort === 'updatedAt' ? 'Sorted by last edited' : 'Sorted by date created';
+    sortBtn.textContent = sort === 'updatedAt' ? 'Sorted by last edited' : 'Sorted by date of the memory';
     const pinned = notes.filter((n) => n.pinned).sort((a, b) => b[sort] - a[sort]);
     const rest = notes.filter((n) => !n.pinned);
     fill(list,
@@ -291,7 +300,7 @@ export async function renderListPane(el, nav, noteId) {
   const filter = h('input', { class: 'list-filter', type: 'search', placeholder: 'Filter notes', value: listFilter, 'aria-label': 'Filter notes', autocomplete: 'off' });
 
   function draw() {
-    sortBtn.textContent = sort === 'updatedAt' ? 'Last edited' : 'Date created';
+    sortBtn.textContent = sort === 'updatedAt' ? 'Last edited' : 'Date of the memory';
     const words = listFilter.toLowerCase().trim().split(/\s+/).filter(Boolean);
     const shown = words.length ? notes.filter((n) => words.every((w) => `${n.title}\n${n.text}`.toLowerCase().includes(w))) : notes;
     const pinned = shown.filter((n) => n.pinned).sort((a, b) => b[sort] - a[sort]);
@@ -571,7 +580,8 @@ export async function renderSearch(root, nav) {
     n.title, n.text,
     ...(n.photos || []).map((p) => p.caption),
     ...(n.collections || []).map((id) => colNames.get(id)),
-    fmt.long(iso(n.createdAt)), fmt.dots(iso(n.createdAt)), fmt.dots(iso(n.createdAt)).slice(0, 5),
+    n.place?.name, n.song?.title, n.dateWords,
+    ...(n.dateKind === 'unknown' ? [] : [fmt.long(iso(n.createdAt)), fmt.dots(iso(n.createdAt)), fmt.dots(iso(n.createdAt)).slice(0, 5)]),
   ].filter(Boolean).join(' \n ').toLowerCase()]));
 
   const months = [...new Set(notes.map((n) => iso(n.createdAt).slice(0, 7)))].sort().reverse();
@@ -588,7 +598,7 @@ export async function renderSearch(root, nav) {
     const words = input.value.toLowerCase().trim().split(/\s+/).filter(Boolean);
     const inMonth = (n) => !lastMonth || iso(n.createdAt).startsWith(lastMonth);
     if (!words.length && !lastMonth) {
-      fill(results, h('p', { class: 'search-hint' }, 'Search titles, the words inside your notes, collections and photo captions. A date like 28.09 works too.'));
+      fill(results, h('p', { class: 'search-hint' }, 'Search titles, the words inside your notes, collections, photo captions, places and songs. A date like 28.09 works too.'));
       return;
     }
     const match = (text) => words.every((w) => (text || '').toLowerCase().includes(w));

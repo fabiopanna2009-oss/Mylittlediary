@@ -112,6 +112,23 @@ export function noteExcerpt(n) {
   return lines.join(' ').slice(0, 160);
 }
 
+// ---------- when did it happen? ----------
+// Not every memory has an exact date. A note stores:
+//   createdAt   a point in time (used to put notes in order)
+//   dateKind    'exact' (default) | 'around' (roughly then) | 'unknown'
+//   dateWords   optional: the date in your own words, e.g. "the last Friday before summer"
+const MONTH_YEAR = { month: 'long', year: 'numeric' };
+const FULL = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+const DAY = { day: 'numeric', month: 'long', year: 'numeric' };
+
+export function noteWhen(n, style = 'long') {
+  const d = new Date(n.createdAt);
+  if (n.dateKind === 'unknown') return n.dateWords?.trim() || 'Date unknown';
+  if (n.dateKind === 'around') return n.dateWords?.trim() || `Around ${d.toLocaleDateString('en-GB', MONTH_YEAR)}`;
+  const exact = d.toLocaleDateString('en-GB', style === 'long' ? FULL : DAY);
+  return n.dateWords?.trim() ? `${exact} · ${n.dateWords.trim()}` : exact;
+}
+
 export const isNoteEmpty = (n) => !n.title?.trim() && !(n.text || '').trim() && !(n.photos || []).length;
 
 export function newNote(extra = {}) {
