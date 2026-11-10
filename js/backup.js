@@ -243,9 +243,17 @@ export async function importBackup(file) {
   await db.saveEntries(newer);
 
   // Your personal words (title, line, date): restored only where this device has none yet.
-  for (const key of ['bookTitle', 'motto', 'specialDate', 'specialLabel', 'words']) {
+  for (const key of ['bookTitle', 'motto', 'specialDate', 'specialLabel']) {
     const value = diary.settings?.[key];
     if (value && !(await db.getSetting(key))) await db.setSetting(key, value);
+  }
+  // Words and sentences are added to the ones you already have (no duplicates).
+  if (diary.settings?.words) {
+    const lines = (text) => (text || '').split('\n').map((l) => l.trim()).filter(Boolean);
+    const mineWords = lines(await db.getSetting('words', ''));
+    const have = new Set(mineWords.map((l) => l.toLowerCase()));
+    const added = lines(diary.settings.words).filter((l) => !have.has(l.toLowerCase()));
+    if (added.length) await db.setSetting('words', [...mineWords, ...added].join('\n'));
   }
 
   return { pages: newer.length, total: diary.entries.length };

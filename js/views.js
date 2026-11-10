@@ -15,12 +15,12 @@ import {
 } from './util.js';
 import { noteTitle, noteExcerpt, noteWhen } from './notes.js';
 import { photoImg, photoURL } from './photos.js';
-import { ridge, wordScatter } from './drawings.js';
+import { ridge, wordScatter, doodle, DOODLES } from './drawings.js';
 import { getTheme, setTheme } from './theme.js';
 import { changePin, faceIdSupported, faceIdEnabled, enableFaceId, disableFaceId } from './lock.js';
 import { createBackup, shareBackup, importBackup } from './backup.js';
 
-export const APP_VERSION = '4.7.0';
+export const APP_VERSION = '4.8.0';
 
 // ================= shared pieces =================
 
@@ -183,7 +183,7 @@ export async function renderHome(root, nav, { intro = false } = {}) {
     db.getSetting('motto', ''), db.getSetting('specialDate', ''), db.getSetting('specialLabel', ''),
   ]);
   const hasOwnWords = !!(await db.getSetting('words', '') || '').trim();
-  const words = (await wordsThatMatter()).slice(0, 24);
+  const words = (await wordsThatMatter()).filter((w) => w.length <= 22).slice(0, 24); // sentences are kept for the opening
   const photos = [...notes].sort((a, b) => b.createdAt - a.createdAt)
     .flatMap((n) => (n.photos || []).map((p) => ({ ...p, note: n, when: p.date || iso(n.createdAt) })));
   const now = new Date();
@@ -257,18 +257,15 @@ export async function renderHome(root, nav, { intro = false } = {}) {
 }
 
 // ================= THE OPENING (plays once after the PIN) =================
-// Your words write themselves in, a few photographs land on the page, and one line from a note appears.
-// Different photographs and a different line each time. Tap anywhere to skip.
-
-const PILE = [ // where each photograph lands: x, y (percent from the middle), tilt
-  [-17, -13, -7], [18, -9, 6], [-6, 9, -3], [21, 13, 9], [-21, 15, -10], [3, -1, 4],
-];
+// Words, sentences, places and photographs pop up one after another all over the page,
+// each at its own angle and size. A different mix every time. Tap anywhere to skip.
 
 function shuffled(list) {
   const a = [...list];
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 }
+const between = (min, max) => min + Math.random() * (max - min);
 
 // Your own words; until you have typed some, the names of your collections stand in for them.
 async function wordsThatMatter() {
@@ -279,34 +276,62 @@ async function wordsThatMatter() {
 
 export async function playOpening({ force = false } = {}) {
   if (!force && await db.getSetting('opening', true) === false) return false;
-  const [notes, bookTitle, words, motto] = await Promise.all([db.allEntries(), db.getSetting('bookTitle', 'Little Memories'), wordsThatMatter(), db.getSetting('motto', '')]);
-  const photos = shuffled(notes.flatMap((n) => (n.photos || []).map((p) => ({ ...p, note: n })))).slice(0, PILE.length);
-  const lines = notes.map((n) => ({ n, line: (n.text || '').split('\n').find((l) => l.trim().length > 12 && l.trim().length < 150) })).filter((x) => x.line);
-  const quote = lines.length ? lines[Math.floor(Math.random() * lines.length)] : null;
+  const [notes, bookTitle, typed, motto, specialDate, specialLabel] = await Promise.all([
+    db.allEntries(), db.getSetting('bookTitle', 'Little Memories'), wordsThatMatter(),
+    db.getSetting('motto', ''), db.getSetting('specialDate', ''), db.getSetting('specialLabel', ''),
+  ]);
+  const big = window.innerWidth >= 900;
 
-  const wordsDone = 0.5 + Math.min(words.length, 12) * 0.14;          // seconds until the words are written
-  const photosDone = wordsDone + 0.3 + photos.length * 0.55;          // …until the last photograph has landed
-  const total = photosDone + (quote ? 2.6 : 1.4);
+  // ----- gather what could appear -----
+  const short = typed.filter((w) => w.length <= 22);
+  const sentences = typed.filter((w) => w.length > 22);
+  // lines from your notes: your own sentences
+  const noteLines = notes.flatMap((n) => (n.text || '').split('\n').map((l) => l.trim()).filter((l) => l.length > 14 && l.length < 110));
+  const places = [...new Set(notes.map((n) => n.place?.name?.trim()).filter(Boolean))];
+  const photos = notes.flatMap((n) => (n.photos || []).map((p) => ({ ...p, note: n })));
 
-  const pile = h('div', { class: 'opening-pile' }, photos.map((p, i) => {
-    const [x, y, tilt] = PILE[i];
-    return h('figure', { class: 'opening-photo', style: { left: `${50 + x}%`, top: `${50 + y}%`, '--tilt': `${tilt}deg`, animationDelay: `${wordsDone + 0.3 + i * 0.55}s` } },
-      photoImg(p.photoId, 'thumb'),
-      (p.caption || p.date) ? h('figcaption', {}, p.caption || fmt.medium(p.date)) : null);
+  const pick = (list, n) => shuffled(list).slice(0, n);
+  const items = [
+    ...pick(short, big ? 13 : 8).map((text) => ({ kind: 'word', text })),
+    ...pick([...sentences, ...noteLines], big ? 6 : 4).map((text) => ({ kind: 'line', text })),
+    ...pick(places, big ? 3 : 2).map((text) => ({ kind: 'place', text })),
+    // your special date, unless it is already among your words
+    ...(specialDate && !typed.some((w) => w.includes(fmt.dots(specialDate).slice(0, 5))) ? [{ kind: 'word', text: [fmt.dots(specialDate).slice(0, 5), specialLabel].filter(Boolean).join(' · ') }] : []),
+    ...(motto ? [{ kind: 'line', text: motto }] : []),
+    ...pick(photos, big ? 6 : 4).map((photo) => ({ kind: 'photo', photo })),
+  ];
+  // a few drawings between them
+  const doodleNames = pick(Object.keys(DOODLES), Math.max(2, Math.round(items.length / 4)));
+  doodleNames.forEach((name) => items.push({ kind: 'doodle', name }));
+
+  // ----- place them: shuffled across the page, popping up in a random order -----
+  const order = shuffled(items.map((_, i) => i));          // when each one appears
+  const step = Math.min(0.32, 5.2 / Math.max(items.length, 1));
+  const colours = ['var(--pen)', 'var(--caramel)', 'var(--ink-2)', 'var(--pen)', 'var(--ink-3)'];
+
+  const cloud = h('div', { class: 'opening-cloud' }, shuffled(items).map((it, i) => {
+    const delay = `${0.7 + order[i] * step}s`;
+    const tilt = `${between(-13, 13).toFixed(1)}deg`;
+    const style = { '--tilt': tilt, animationDelay: delay, marginTop: `${between(0, 14).toFixed(0)}px`, color: colours[i % colours.length] };
+    if (it.kind === 'photo') {
+      return h('figure', { class: 'pop pop-photo', style },
+        photoImg(it.photo.photoId, 'thumb'),
+        (it.photo.caption || it.photo.date) ? h('figcaption', {}, it.photo.caption || fmt.medium(it.photo.date)) : null);
+    }
+    if (it.kind === 'doodle') { const d = doodle(it.name, i); d.classList.add('pop'); Object.assign(d.style, { animationDelay: delay }); d.style.setProperty('--tilt', tilt); return d; }
+    if (it.kind === 'line') return h('span', { class: 'pop pop-line', style: { ...style, '--tilt': `${between(-6, 6).toFixed(1)}deg` } }, `“${it.text}”`);
+    if (it.kind === 'place') return h('span', { class: 'pop pop-place', style }, it.text);
+    const size = it.text.length <= 8 ? between(big ? 54 : 40, big ? 78 : 56) : between(big ? 36 : 28, big ? 52 : 38);
+    const penHand = i % 3 === 0; // some in the clearer pen hand (which runs larger, so it is scaled down)
+    return h('span', { class: `pop pop-word ${penHand ? 'pen-hand' : ''}`, style: { ...style, fontSize: `${(size * (penHand ? 0.62 : 1)).toFixed(0)}px` } }, it.text);
   }));
 
+  const total = 0.7 + items.length * step + 2.8;
   const overlay = h('div', { class: 'opening', role: 'button', 'aria-label': 'Open the journal' },
     h('div', { class: 'opening-title' }, bookTitle || 'Little Memories'),
-    motto ? h('div', { class: 'opening-motto' }, motto) : null,
-    h('div', { class: 'opening-ridge' }, ridge('')),
-    wordScatter(shuffled(words).slice(0, 12)),
-    photos.length ? pile : null,
-    quote ? h('p', { class: 'opening-quote', style: { animationDelay: `${photosDone + 0.2}s` } },
-      `“${quote.line.trim()}”`,
-      h('span', { class: 'opening-quote-date' }, noteWhen(quote.n, 'short'))) : null,
-    h('span', { class: 'opening-hint', style: { animationDelay: `${Math.min(total - 0.6, 3)}s` } }, 'tap to open'),
+    cloud,
+    h('span', { class: 'opening-hint', style: { animationDelay: '2.5s' } }, 'tap to open'),
   );
-  overlay.style.setProperty('--word-step', '0.14s');
 
   return new Promise((resolve) => {
     let done = false;
@@ -314,7 +339,7 @@ export async function playOpening({ force = false } = {}) {
       if (done) return;
       done = true;
       overlay.classList.add('leaving');
-      setTimeout(() => overlay.remove(), 450);
+      setTimeout(() => overlay.remove(), 500);
       resolve(true);
     };
     overlay.addEventListener('click', finish);
@@ -323,6 +348,18 @@ export async function playOpening({ force = false } = {}) {
     document.addEventListener('visibilitychange', function onHide() { if (document.visibilityState === 'hidden') { document.removeEventListener('visibilitychange', onHide); finish(); } });
     setTimeout(finish, total * 1000);
     document.body.append(overlay);
+    // If it doesn't all fit on this screen, take things away until it does (drawings first, then the rest).
+    const trim = () => {
+      let guard = 40;
+      while (cloud.scrollHeight > cloud.clientHeight + 2 && cloud.children.length > 5 && guard-- > 0) {
+        // photographs are kept the longest
+        (cloud.querySelector('.doodle') || cloud.querySelector('.pop-place') || cloud.querySelector('.pop-word.pen-hand')
+          || cloud.querySelector('.pop-line') || cloud.querySelector('.pop-word') || cloud.lastElementChild).remove();
+      }
+    };
+    trim();
+    document.fonts?.ready.then(trim);
+    cloud.querySelectorAll('img').forEach((img) => img.addEventListener('load', trim)); // photographs get their height when loaded
   });
 }
 
@@ -872,14 +909,14 @@ export async function renderSettings(root, nav) {
         h('button', { class: 'set-row', onclick: () => playOpening({ force: true }) }, h('span', {}, 'Play the opening now'), icon('chevron')),
       ),
       h('section', { class: 'set-group' },
-        h('h2', { class: 'eyebrow' }, 'Words that matter'),
+        h('h2', { class: 'eyebrow' }, 'Words and sentences that matter'),
         h('textarea', {
-          class: 'sheet-input words-input', rows: 6, value: wordsText, 'aria-label': 'Words that matter', maxlength: 800,
-          placeholder: 'One per line: a nickname, a phrase, a place, a date, a song…',
+          class: 'sheet-input words-input', rows: 8, value: wordsText, 'aria-label': 'Words that matter', maxlength: 3000,
+          placeholder: 'One per line: a nickname, a phrase, a place, a date, a sentence you never want to forget…',
           onchange: async (e) => { await db.setSetting('words', e.target.value); toast('Saved'); },
         }),
       ),
-      h('p', { class: 'set-note' }, 'After the PIN, the journal opens with your words, a few of your photographs and a line from one of your notes, different each time (tap to skip). Your words are also scribbled across the first page, between small drawings and a spiral of your photographs. Everything here is saved only on this device: the line appears under the title, and the date is marked at the top of the mountain.'),
+      h('p', { class: 'set-note' }, 'One per line: single words, or whole sentences. After the PIN, the journal opens with them popping up across the page, together with your places, photographs and lines from your notes, different each time (tap to skip). Your words are also scribbled across the first page, between small drawings and a spiral of your photographs. Everything here is saved only on this device: the line appears under the title, and the date is marked at the top of the mountain.'),
       group('Privacy',
         h('button', { class: 'set-row', onclick: async () => { if (await changePin()) toast('PIN changed'); } }, h('span', {}, 'Change PIN'), icon('chevron')),
         faceIdRow,

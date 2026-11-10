@@ -18,7 +18,7 @@ export function ridge(label = '') {
 }
 
 // Pen doodles of ordinary things. Each is one or two wobbly strokes, drawn as if in a notebook margin.
-const DOODLES = {
+export const DOODLES = {
   mountain: '<path d="M4 34c6-4 9-11 14-17 3-4 5 1 8-3 3-5 5-9 8-9s5 6 9 11c4 5 8 11 14 16"/><path d="M30 9l3 4 3-3"/>',
   bottle: '<path d="M21 6h10M22 6c0 5-6 7-6 14v20c0 3 2 4 5 4h10c3 0 5-1 5-4V20c0-7-6-9-6-14"/><path d="M16 25c7 2 13 2 20 0M16 33c7 2 13 2 20 0"/>',
   ball: '<path d="M26 6c11 0 20 9 20 20s-9 20-20 20S6 37 6 26 15 6 26 6z"/><path d="M26 17l8 6-3 10H21l-3-10zM26 17V7M34 23l10-3M31 33l6 9M21 33l-6 9M18 23L8 20"/>',
