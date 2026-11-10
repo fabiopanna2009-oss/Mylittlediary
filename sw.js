@@ -4,7 +4,7 @@
 // How updates work: the app opens instantly from the saved copy, and in the background
 // it checks GitHub for a newer version. The next time you open the app, you get the new one.
 
-const CACHE = 'little-memories-v1';
+const CACHE = 'little-memories-v2';
 
 const APP_FILES = [
   './',
@@ -25,18 +25,10 @@ const APP_FILES = [
   'icons/apple-touch-icon.png',
   'icons/icon-192.png',
   'icons/icon-512.png',
-  'fonts/cormorant-garamond-latin-400-normal.woff2',
-  'fonts/cormorant-garamond-latin-500-normal.woff2',
-  'fonts/cormorant-garamond-latin-600-normal.woff2',
-  'fonts/cormorant-garamond-latin-400-italic.woff2',
-  'fonts/cormorant-garamond-latin-600-italic.woff2',
-  'fonts/nunito-sans-latin-400-normal.woff2',
-  'fonts/nunito-sans-latin-600-normal.woff2',
-  'fonts/nunito-sans-latin-700-normal.woff2',
-  'fonts/nunito-sans-latin-400-italic.woff2',
-  'fonts/lora-latin-400-normal.woff2',
-  'fonts/lora-latin-600-normal.woff2',
-  'fonts/lora-latin-400-italic.woff2',
+  'fonts/newsreader-latin-opsz-normal.woff2',
+  'fonts/newsreader-latin-opsz-italic.woff2',
+  'fonts/hanken-grotesk-latin-wght-normal.woff2',
+  'fonts/hanken-grotesk-latin-wght-italic.woff2',
 ];
 
 self.addEventListener('install', (event) => {

@@ -19,6 +19,13 @@ export function h(tag, attrs = {}, ...children) {
   return el;
 }
 
+// Replace an element's content, skipping empty values and flattening lists (unlike el.replaceChildren).
+export function fill(el, ...children) {
+  el.replaceChildren();
+  append(el, children);
+  return el;
+}
+
 function append(el, children) {
   for (const child of children.flat(Infinity)) {
     if (child === null || child === undefined || child === false) continue;
@@ -26,34 +33,28 @@ function append(el, children) {
   }
 }
 
-// ---------- Icons (small line drawings) ----------
+// ---------- Icons (thin line drawings, used sparingly) ----------
 const ICONS = {
-  back: '<path d="M15 5l-7 7 7 7"/>',
-  plus: '<path d="M12 5v14M5 12h14"/>',
-  quill: '<path d="M20 4c-6 1-11 6-13 13l-2 3"/><path d="M20 4c0 6-4 11-10 12"/><path d="M9 13l3 1"/>',
-  star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
-  search: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>',
-  calendar: '<rect x="4" y="5.5" width="16" height="14.5" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',
-  gear: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/>',
-  lock: '<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 018 0v2.5"/>',
-  camera: '<path d="M4 8.5h3l1.5-2.5h7L17 8.5h3v10.5H4z"/><circle cx="12" cy="13.5" r="3.5"/>',
-  trash: '<path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13"/>',
-  up: '<path d="M6 14l6-6 6 6"/>',
-  down: '<path d="M6 10l6 6 6-6"/>',
-  close: '<path d="M6 6l12 12M18 6L6 18"/>',
-  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
-  spark: '<path d="M12 3v5M12 16v5M3 12h5M16 12h5M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/>',
-  left: '<path d="M14 6l-6 6 6 6"/>',
-  right: '<path d="M10 6l6 6-6 6"/>',
-  faceid: '<path d="M4 8V5.5A1.5 1.5 0 015.5 4H8M16 4h2.5A1.5 1.5 0 0120 5.5V8M20 16v2.5a1.5 1.5 0 01-1.5 1.5H16M8 20H5.5A1.5 1.5 0 014 18.5V16"/><path d="M9 9.5v1M15 9.5v1M12 9.5v3.5h-1M9.5 15.5c1.4 1.2 3.6 1.2 5 0"/>',
-  bookmark: '<path d="M7 4h10v16l-5-3.5L7 20z"/>',
+  back: '<path d="M14.5 5.5L8 12l6.5 6.5"/>',
+  arrow: '<path d="M5 12h13M13 6.5l5.5 5.5-5.5 5.5"/>',
+  star: '<path d="M12 4l2.35 4.9 5.35.75-3.9 3.7.95 5.3L12 16.1l-4.75 2.55.95-5.3-3.9-3.7 5.35-.75z"/>',
+  search: '<circle cx="11" cy="11" r="6"/><path d="M15.5 15.5L20 20"/>',
+  lock: '<rect x="5.5" y="10.5" width="13" height="9.5" rx="1.5"/><path d="M8.5 10.5V8a3.5 3.5 0 017 0v2.5"/>',
+  photo: '<rect x="3.5" y="5.5" width="17" height="13" rx="1"/><path d="M3.5 15l4.5-4 4 3.5 3-2.5 5.5 4.5"/><circle cx="15.5" cy="9.5" r="1.3"/>',
+  compose: '<path d="M12 4.5H6A1.5 1.5 0 004.5 6v12A1.5 1.5 0 006 19.5h12a1.5 1.5 0 001.5-1.5v-6"/><path d="M17.5 4l2.5 2.5-7.5 7.5-3.2.7.7-3.2z"/>',
+  edit: '<path d="M4.5 19.5l1-4L16 5l3 3L8.5 18.5z"/><path d="M14 7l3 3"/>',
+  close: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
+  left: '<path d="M14.5 6L8.5 12l6 6"/>',
+  right: '<path d="M9.5 6l6 6-6 6"/>',
+  chevron: '<path d="M9.5 6l6 6-6 6"/>',
+  more: '<circle cx="6" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="18" cy="12" r="1"/>',
 };
 
 export function icon(name, extraClass = '') {
   const span = document.createElement('span');
   span.className = `icon ${extraClass}`.trim();
   span.setAttribute('aria-hidden', 'true');
-  span.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>`;
+  span.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>`;
   return span;
 }
 
@@ -89,12 +90,19 @@ export const fmt = {
   monthShort: (iso) => parseISO(iso).toLocaleDateString(LOCALE, { month: 'short' }),
 };
 
+// 'Tuesday, 10 November' (no year when it's this year)
+export function friendlyDate(iso) {
+  const d = parseISO(iso);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString(LOCALE, sameYear ? { weekday: 'long', day: 'numeric', month: 'long' } : { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
 export function greeting(d = new Date()) {
   const hr = d.getHours();
-  if (hr < 5) return 'Still awake';
-  if (hr < 12) return 'Good morning';
-  if (hr < 18) return 'Good afternoon';
-  return 'Good evening';
+  if (hr < 5) return 'Still awake.';
+  if (hr < 12) return 'Good morning.';
+  if (hr < 18) return 'Good afternoon.';
+  return 'Good evening.';
 }
 
 // ---------- Auto-lock pause ----------
@@ -173,9 +181,11 @@ export function ask({ title, message = '', ok = 'OK', cancel = 'Cancel', danger 
     }, ok);
     const overlay = h('div', { class: 'dialog-overlay', onclick: (e) => { if (e.target === overlay) close(field ? null : false); } },
       h('div', { class: 'dialog', role: 'dialog', 'aria-modal': 'true' },
-        h('h3', { class: 'dialog-title' }, title),
-        message ? h('p', { class: 'dialog-message' }, message) : null,
-        field,
+        h('div', { class: 'dialog-body' },
+          h('h3', { class: 'dialog-title' }, title),
+          message ? h('p', { class: 'dialog-message' }, message) : null,
+          field,
+        ),
         h('div', { class: 'dialog-actions' },
           h('button', { class: 'dialog-btn', onclick: () => close(field ? null : false) }, cancel),
           confirmBtn,

@@ -6,9 +6,9 @@
 // Everything saves automatically while you write.
 
 import { db } from './db.js';
-import { h, icon, uid, todayISO, nowTime, debounce, isEntryEmpty, entryText, entryPhotos, toast, ask, fmt, pickFiles } from './util.js';
+import { h, fill, icon, uid, todayISO, nowTime, debounce, isEntryEmpty, entryText, entryPhotos, toast, ask, fmt, pickFiles } from './util.js';
 import { KINDS, MOODS, PROMPTS, LETTER_PROMPTS, DETAIL_PROMPTS, randomFrom } from './content.js';
-import { addPhotoFromFile, photoImg, cleanUpUnusedPhotos } from './photos.js';
+import { addPhotoFromFile, printFigure, cleanUpUnusedPhotos } from './photos.js';
 
 let current = null;        // the page being edited
 let saveSoon = null;       // debounced save
@@ -72,7 +72,7 @@ function setStatus(text) {
 }
 
 function changed() {
-  setStatus('…');
+  setStatus('Saving…');
   saveSoon();
 }
 
@@ -83,16 +83,16 @@ function autoGrow(ta) {
 }
 
 function placeholderFor(kind, index) {
-  if (index > 0) return 'Keep writing…';
+  if (index > 0) return 'Continue writing…';
   if (kind === 'letter') return 'Dear …';
   if (kind === 'detail') return 'Something small you remember…';
-  if (kind === 'thought') return 'Whatever is on your mind…';
+  if (kind === 'thought') return 'What’s on your mind?';
   if (kind === 'memory') return 'A moment you never want to forget…';
-  return 'Dear diary…';
+  return 'Begin anywhere…';
 }
 
 export async function renderEditor(root, { id, kind, date, collection, milestone, prompt, onDone }) {
-  // Load or create the page.
+  // ----- load or create the page -----
   if (id) {
     const stored = await db.getEntry(id);
     if (!stored) { onDone(); return; }
@@ -118,121 +118,143 @@ export async function renderEditor(root, { id, kind, date, collection, milestone
 
   // ----- top bar -----
   const favBtn = h('button', {
-    class: `icon-btn fav ${current.favorite ? 'on' : ''}`,
+    class: `icon-btn ${current.favorite ? 'on' : ''}`,
     'aria-label': 'Favourite',
+    'aria-pressed': String(!!current.favorite),
     onclick: () => {
       current.favorite = !current.favorite;
       favBtn.classList.toggle('on', current.favorite);
+      favBtn.setAttribute('aria-pressed', String(current.favorite));
       toast(current.favorite ? 'Added to favourites' : 'Removed from favourites');
       changed();
     },
   }, icon('star'));
 
-  const topbar = h('header', { class: 'topbar' },
-    h('button', { class: 'icon-btn', 'aria-label': 'Back', onclick: () => onDone() }, icon('back')),
-    h('div', { class: 'topbar-center' },
-      h('div', { class: 'topbar-kicker' }, kindInfo.one),
-      h('div', { class: 'save-status', id: 'save-status' }, current._saved ? 'Saved' : ''),
+  const fileInput = h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
+  const addPhotos = () => pickFiles(fileInput); // opens the photo picker without locking the journal
+
+  const topbar = h('header', { class: 'bar' },
+    h('button', { class: 'icon-btn', 'aria-label': 'Done', onclick: () => onDone() }, icon('back')),
+    h('div', { class: 'bar-title' }, h('span', { class: 'save-state', id: 'save-status' }, current._saved ? 'Saved' : kindInfo.one)),
+    h('div', { class: 'bar-actions' },
+      h('button', { class: 'icon-btn', 'aria-label': 'Add a photograph', onclick: addPhotos }, icon('photo')),
+      favBtn,
     ),
-    favBtn,
   );
 
-  // ----- date, time -----
-  const dateInput = h('input', { type: 'date', class: 'meta-input', value: current.date, oninput: (e) => { current.date = e.target.value || todayISO(); dateLabel.textContent = fmt.long(current.date); changed(); } });
-  const timeInput = h('input', { type: 'time', class: 'meta-input', value: current.time || '', oninput: (e) => { current.time = e.target.value; changed(); } });
-  const dateLabel = h('span', { class: 'date-label' }, fmt.long(current.date));
-  const meta = h('div', { class: 'page-meta' },
-    h('label', { class: 'meta-date' }, dateLabel, dateInput),
-    h('label', { class: 'meta-time' }, timeInput),
+  // ----- date & time -----
+  const dateLabel = h('span', { class: 'eyebrow' }, fmt.long(current.date));
+  const timeLabel = h('span', { class: 'eyebrow muted' }, current.time || 'Add time');
+  const meta = h('div', { class: 'ed-meta' },
+    h('label', { class: 'ed-date' }, dateLabel,
+      h('input', {
+        type: 'date', value: current.date, 'aria-label': 'Date',
+        oninput: (e) => { current.date = e.target.value || todayISO(); dateLabel.textContent = fmt.long(current.date); changed(); },
+      })),
+    h('label', { class: 'ed-time' }, timeLabel,
+      h('input', {
+        type: 'time', value: current.time || '', 'aria-label': 'Time',
+        oninput: (e) => { current.time = e.target.value; timeLabel.textContent = current.time || 'Add time'; changed(); },
+      })),
   );
 
   // ----- title -----
   const titleInput = h('textarea', {
-    class: 'page-title-input',
+    class: 'ed-title',
     rows: 1,
-    placeholder: current.kind === 'letter' ? 'A letter to…' : 'Title',
+    placeholder: current.kind === 'letter' ? 'A title for this letter' : 'Title',
     value: current.title,
+    'aria-label': 'Title',
     oninput: (e) => { current.title = e.target.value.replace(/\n/g, ' '); autoGrow(e.target); changed(); },
     onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); blocksEl.querySelector('textarea')?.focus(); } },
   });
 
-  // ----- mood -----
-  const moodRow = h('div', { class: 'moods', role: 'radiogroup', 'aria-label': 'Mood' },
-    MOODS.map((m) => {
-      const btn = h('button', {
-        class: `mood ${current.mood === m.id ? 'selected' : ''}`,
-        'aria-pressed': current.mood === m.id ? 'true' : 'false',
-        onclick: () => {
-          current.mood = current.mood === m.id ? null : m.id;
-          moodRow.querySelectorAll('.mood').forEach((b) => b.classList.remove('selected'));
-          if (current.mood) btn.classList.add('selected');
-          changed();
-        },
-      }, h('span', { class: 'mood-emoji' }, m.emoji), h('span', { class: 'mood-label' }, m.label));
-      return btn;
-    }),
+  // ----- mood (optional) -----
+  const moodRow = h('div', { class: 'moods', role: 'group', 'aria-label': 'Mood' },
+    h('span', { class: 'moods-label' }, 'Feeling'),
+    MOODS.map((m) => h('button', {
+      class: 'mood',
+      'aria-pressed': String(current.mood === m.id),
+      onclick: (ev) => {
+        current.mood = current.mood === m.id ? null : m.id;
+        moodRow.querySelectorAll('.mood').forEach((b) => b.setAttribute('aria-pressed', 'false'));
+        if (current.mood) ev.currentTarget.setAttribute('aria-pressed', 'true');
+        changed();
+      },
+    }, m.label)),
   );
 
-  // ----- gentle prompt -----
+  // ----- a gentle prompt, only if wanted -----
   const promptList = current.kind === 'letter' ? LETTER_PROMPTS : current.kind === 'detail' ? DETAIL_PROMPTS : PROMPTS;
   let shownPrompt = prompt || null;
-  const promptText = h('span', { class: 'prompt-text' }, shownPrompt || 'Need a little spark?');
-  const promptBox = h('button', {
-    class: 'prompt',
-    onclick: () => {
-      shownPrompt = randomFrom(promptList, shownPrompt);
-      promptText.textContent = shownPrompt;
-      promptBox.classList.add('has-prompt');
-    },
-  }, icon('spark'), promptText);
-  if (shownPrompt) promptBox.classList.add('has-prompt');
-
-  // ----- blocks -----
-  function renderBlocks() {
-    blocksEl.replaceChildren(...current.blocks.map((block, index) => (block.type === 'photo' ? photoBlock(block, index) : textBlock(block, index))));
-    blocksEl.querySelectorAll('textarea').forEach(autoGrow);
+  const promptBtn = h('button', { class: 'ed-prompt' });
+  function drawPrompt() {
+    if (!shownPrompt) {
+      promptBtn.className = 'ed-prompt';
+      promptBtn.replaceChildren('A prompt, if you’d like one');
+    } else {
+      promptBtn.className = 'ed-prompt shown';
+      promptBtn.replaceChildren(shownPrompt, h('span', { class: 'ed-prompt-again' }, 'Another prompt'));
+    }
   }
+  promptBtn.addEventListener('click', () => { shownPrompt = randomFrom(promptList, shownPrompt); drawPrompt(); });
+  drawPrompt();
 
-  function textBlock(block, index) {
-    const ta = h('textarea', {
-      class: 'page-text',
-      placeholder: placeholderFor(current.kind, index),
-      value: block.text,
-      oninput: (e) => { block.text = e.target.value; autoGrow(e.target); rememberCaret(e.target, index); changed(); },
-      onfocus: (e) => rememberCaret(e.target, index),
-      onkeyup: (e) => rememberCaret(e.target, index),
-      onclick: (e) => rememberCaret(e.target, index),
-    });
-    return ta;
+  // ----- the page itself: text and photographs -----
+  function renderBlocks() {
+    let photoCount = 0;
+    blocksEl.replaceChildren(...current.blocks.map((block, index) => (block.type === 'photo'
+      ? photoBlock(block, index, photoCount++ % 2 === 1)
+      : textBlock(block, index))));
+    blocksEl.querySelectorAll('textarea').forEach(autoGrow);
   }
 
   function rememberCaret(ta, index) {
     lastFocus = { index, caret: ta.selectionStart ?? ta.value.length };
   }
 
-  function photoBlock(block, index) {
-    const caption = h('input', {
-      class: 'caption-input', type: 'text', placeholder: 'Write a caption…', value: block.caption || '', maxlength: 200,
-      oninput: (e) => { block.caption = e.target.value; changed(); },
+  function textBlock(block, index) {
+    return h('textarea', {
+      class: 'ed-text',
+      placeholder: placeholderFor(current.kind, index),
+      value: block.text,
+      'aria-label': 'Text',
+      oninput: (e) => { block.text = e.target.value; autoGrow(e.target); rememberCaret(e.target, index); changed(); },
+      onfocus: (e) => rememberCaret(e.target, index),
+      onkeyup: (e) => rememberCaret(e.target, index),
+      onclick: (e) => rememberCaret(e.target, index),
+      onblur: (e) => rememberCaret(e.target, index),
     });
-    const date = h('input', {
-      class: 'caption-date', type: 'date', value: block.date || '',
-      oninput: (e) => { block.date = e.target.value; changed(); },
-    });
-    const tilt = ((index * 7919) % 5) - 2; // a small, stable tilt for each photo
-    return h('figure', { class: 'polaroid', style: { '--tilt': `${tilt * 0.6}deg` } },
-      h('div', { class: 'polaroid-tools' },
-        h('button', { class: 'mini-btn', 'aria-label': 'Move up', onclick: () => movePhoto(index, -1) }, icon('up')),
-        h('button', { class: 'mini-btn', 'aria-label': 'Move down', onclick: () => movePhoto(index, 1) }, icon('down')),
-        h('button', { class: 'mini-btn', 'aria-label': 'Remove photo', onclick: () => removePhoto(index) }, icon('close')),
-      ),
-      h('span', { class: 'tape tape-left' }), h('span', { class: 'tape tape-right' }),
-      h('div', { class: 'polaroid-img' }, photoImg(block.photoId, 'full', 'vintage')),
-      h('figcaption', {}, caption, date),
-    );
   }
 
-  // Joins text blocks that end up next to each other.
+  function photoBlock(block, index, alt) {
+    const caption = h('figcaption', {},
+      h('input', {
+        class: 'caption-input', type: 'text', placeholder: 'Add a caption', value: block.caption || '', maxlength: 200, 'aria-label': 'Caption',
+        oninput: (e) => { block.caption = e.target.value; changed(); },
+      }),
+      photoDate(block),
+    );
+    const { figure } = printFigure(block.photoId, { alt, caption });
+    figure.append(h('div', { class: 'print-tools' },
+      h('button', { onclick: () => movePhoto(index, -1), disabled: moveTarget(index, -1) < 0 }, 'Move up'),
+      h('button', { onclick: () => movePhoto(index, 1), disabled: moveTarget(index, 1) < 0 }, 'Move down'),
+      h('button', { class: 'remove', onclick: () => removePhoto(index) }, 'Remove'),
+    ));
+    return figure;
+  }
+
+  // The photo's date as quiet text; tapping it opens the iPhone date picker.
+  function photoDate(block) {
+    const label = h('span', { class: 'caption-date' }, block.date ? fmt.medium(block.date) : 'Add a date');
+    return h('label', { class: 'photo-date' }, label,
+      h('input', {
+        type: 'date', value: block.date || '', 'aria-label': 'Date of the photograph',
+        oninput: (e) => { block.date = e.target.value; label.textContent = block.date ? fmt.medium(block.date) : 'Add a date'; changed(); },
+      }));
+  }
+
+  // Joins text blocks that end up next to each other; keeps a text block at the start and end.
   function mergeTexts() {
     const merged = [];
     for (const b of current.blocks) {
@@ -246,12 +268,18 @@ export async function renderEditor(root, { id, kind, date, collection, milestone
     current.blocks = merged;
   }
 
-  function movePhoto(index, dir) {
-    // Find the next photo position in that direction (skip over text).
+  // Where a photo would move to: past the next paragraph or photo (empty text is skipped). -1 = can't move.
+  function moveTarget(index, dir) {
     const blocks = current.blocks;
     let target = index + dir;
-    while (target >= 0 && target < blocks.length && blocks[target].type !== 'photo' && blocks[target].text.trim() === '') target += dir;
-    if (target < 0 || target >= blocks.length) return;
+    while (target >= 0 && target < blocks.length && blocks[target].type === 'text' && blocks[target].text.trim() === '') target += dir;
+    return target >= 0 && target < blocks.length ? target : -1;
+  }
+
+  function movePhoto(index, dir) {
+    const blocks = current.blocks;
+    const target = moveTarget(index, dir);
+    if (target < 0) return;
     [blocks[index], blocks[target]] = [blocks[target], blocks[index]];
     mergeTexts();
     renderBlocks();
@@ -259,7 +287,7 @@ export async function renderEditor(root, { id, kind, date, collection, milestone
   }
 
   async function removePhoto(index) {
-    const ok = await ask({ title: 'Remove this photo?', message: 'It will be removed from this page.', ok: 'Remove', danger: true });
+    const ok = await ask({ title: 'Remove this photograph?', message: 'It will be taken out of this page.', ok: 'Remove', danger: true });
     if (!ok) return;
     current.blocks.splice(index, 1);
     mergeTexts();
@@ -267,13 +295,11 @@ export async function renderEditor(root, { id, kind, date, collection, milestone
     changed();
   }
 
-  // ----- add photos -----
-  const fileInput = h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
   fileInput.addEventListener('change', async () => {
     const files = [...fileInput.files];
     fileInput.value = '';
     if (!files.length) return;
-    setStatus('Adding photos…');
+    setStatus('Adding photographs…');
 
     const newBlocks = [];
     for (const file of files) {
@@ -281,56 +307,45 @@ export async function renderEditor(root, { id, kind, date, collection, milestone
         const photoId = await addPhotoFromFile(file);
         newBlocks.push({ type: 'photo', photoId, caption: '', date: current.date });
       } catch {
-        toast('One photo couldn’t be added.');
+        toast('One photograph couldn’t be added');
       }
     }
-    if (!newBlocks.length) return;
+    if (!newBlocks.length) { setStatus(current._saved ? 'Saved' : ''); return; }
 
-    // Insert at the cursor: split that text block in two.
+    // Insert where the cursor was: split that paragraph in two and place the photos in between.
     let { index, caret } = lastFocus || { index: current.blocks.length - 1, caret: Infinity };
     if (current.blocks[index]?.type !== 'text') { index = current.blocks.length - 1; caret = Infinity; }
     const block = current.blocks[index];
     const before = block.text.slice(0, caret).replace(/\s+$/, '');
     const after = block.text.slice(caret).replace(/^\s+/, '');
-    current.blocks.splice(index, 1,
-      { type: 'text', text: before },
-      ...newBlocks,
-      { type: 'text', text: after });
-    // Remove empty text blocks in the middle, keep one at the start and end.
+    current.blocks.splice(index, 1, { type: 'text', text: before }, ...newBlocks, { type: 'text', text: after });
     current.blocks = current.blocks.filter((b, i, arr) => b.type !== 'text' || b.text || i === 0 || i === arr.length - 1);
     mergeTexts();
     renderBlocks();
     await saveCurrent();
-    // Put the cursor in the text right after the new photos.
-    const lastPhotoIndex = current.blocks.findIndex((b) => b === newBlocks[newBlocks.length - 1]);
-    const nextText = blocksEl.children[lastPhotoIndex + 1];
-    if (nextText?.tagName === 'TEXTAREA') {
-      lastFocus = { index: lastPhotoIndex + 1, caret: 0 };
-      nextText.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    }
+
+    const lastPhotoIndex = current.blocks.indexOf(newBlocks[newBlocks.length - 1]);
+    lastFocus = { index: lastPhotoIndex + 1, caret: 0 };
+    blocksEl.children[lastPhotoIndex]?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   });
 
-  const addPhotoBtn = h('button', {
-    class: 'tool-btn',
-    onclick: () => pickFiles(fileInput), // opens the photo picker without locking the diary
-  }, icon('camera'), 'Add photo');
-
   // ----- collections -----
-  const chips = h('div', { class: 'chips' });
-  function renderChips() {
-    chips.replaceChildren(
+  const tags = h('div', { class: 'tags' });
+  function renderTags() {
+    tags.replaceChildren(
       ...collections.map((c) => h('button', {
-        class: `chip ${current.collections.includes(c.id) ? 'on' : ''}`,
+        class: 'tag',
+        'aria-pressed': String(current.collections.includes(c.id)),
         onclick: () => {
           current.collections = current.collections.includes(c.id)
             ? current.collections.filter((x) => x !== c.id)
             : [...current.collections, c.id];
-          renderChips();
+          renderTags();
           changed();
         },
       }, c.name)),
       h('button', {
-        class: 'chip chip-add',
+        class: 'tag add',
         onclick: async () => {
           const name = await ask({ title: 'New collection', input: '', placeholder: 'e.g. Summer 2026', ok: 'Create' });
           if (!name) return;
@@ -338,23 +353,16 @@ export async function renderEditor(root, { id, kind, date, collection, milestone
           await db.saveCollection(c);
           collections.push(c);
           current.collections.push(c.id);
-          renderChips();
+          renderTags();
           changed();
         },
-      }, '+ New'),
+      }, '+ New collection'),
     );
   }
-  renderChips();
+  renderTags();
 
-  // ----- timeline toggle -----
-  const milestoneToggle = h('label', { class: 'switch-row' },
-    h('span', {}, h('strong', {}, 'Important date'), h('br'), h('small', { class: 'muted' }, 'Show this page on your timeline')),
-    h('input', { type: 'checkbox', class: 'switch', checked: !!current.milestone, onchange: (e) => { current.milestone = e.target.checked; changed(); } }),
-  );
-
-  // ----- delete -----
   const deleteBtn = h('button', {
-    class: 'danger-link',
+    class: 'danger-btn',
     onclick: async () => {
       const ok = await ask({ title: 'Delete this page?', message: 'This can’t be undone.', ok: 'Delete', danger: true });
       if (!ok) return;
@@ -365,25 +373,29 @@ export async function renderEditor(root, { id, kind, date, collection, milestone
       toast('Page deleted');
       onDone({ deleted: true });
     },
-  }, icon('trash'), 'Delete page');
+  }, 'Delete this page');
 
   renderBlocks();
 
-  root.replaceChildren(
+  fill(root, 
     topbar,
-    h('main', { class: 'content editor' },
-      h('article', { class: `paper page kind-${current.kind}` },
-        meta,
-        titleInput,
-        moodRow,
-        promptBox,
-        blocksEl,
-        h('div', { class: 'page-tools' }, addPhotoBtn, fileInput),
-      ),
-      h('section', { class: 'editor-extras' },
-        h('h3', { class: 'small-heading' }, 'Collections'),
-        chips,
-        milestoneToggle,
+    h('main', { class: `screen editor enter kind-${current.kind}` },
+      meta,
+      titleInput,
+      moodRow,
+      promptBtn,
+      h('hr', { class: 'short-rule' }),
+      blocksEl,
+      h('button', { class: 'ed-add', onclick: addPhotos }, icon('photo'), 'Add a photograph'),
+      fileInput,
+      h('section', { class: 'ed-extras' },
+        h('div', { class: 'ed-section' }, h('h2', { class: 'eyebrow' }, 'Collections'), tags),
+        h('div', { class: 'ed-section' },
+          h('label', { class: 'toggle-row' },
+            h('span', {}, h('strong', {}, 'Important date'), h('small', {}, 'Show this page on your timeline')),
+            h('input', { type: 'checkbox', class: 'switch', checked: !!current.milestone, onchange: (e) => { current.milestone = e.target.checked; changed(); } }),
+          ),
+        ),
         deleteBtn,
       ),
     ),
@@ -392,10 +404,9 @@ export async function renderEditor(root, { id, kind, date, collection, milestone
   requestAnimationFrame(() => {
     autoGrow(titleInput);
     blocksEl.querySelectorAll('textarea').forEach(autoGrow);
-    // New page: start writing right away.
     if (!id) {
       const first = blocksEl.querySelector('textarea');
-      if (current.kind === 'letter' && first) {
+      if ((current.kind === 'letter' || current.kind === 'thought' || current.kind === 'detail') && first) {
         first.focus();
         first.setSelectionRange(first.value.length, first.value.length);
       } else {

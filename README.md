@@ -1,16 +1,17 @@
 # Little Memories
 
-A private diary app for iPhone. It feels like an old journal: warm paper, leather browns and gold, photos glued between your words.
+A private journal for iPhone, designed like an independent editorial journal crossed with an old personal diary: warm ivory paper, cocoa ink, walnut brown, fine hairlines, and photographs that are given room to breathe.
 
 **Your diary lives only on your phone.** This repository contains just the empty app (the code). None of your entries, photos or names are ever stored here or sent anywhere.
 
 ## What it can do
 
 - **Write freely.** Unlimited pages per day, each with a title, date, time and as much text as you want. It saves automatically while you write.
-- **Photos like a scrapbook.** Add pictures exactly where your cursor is, between paragraphs, with a caption and a date. They get a soft vintage look, but the original photo stays untouched.
+- **Photographs in your pages.** Add pictures exactly where your cursor is, between paragraphs, with an optional caption and date. They are shown as they are, like prints with a thin white border; upright photos are placed slightly narrower, alternating left and right.
 - **Moods and prompts.** An optional mood for each page, and gentle writing prompts that are only there if you want them.
 - **Chapters:** Today's thoughts, Journal, Letters (that you may never send), Memories, Little details, Timeline, Collections, Gallery and Favourites.
-- **Browse like a book.** A contents page, a calendar, and a reader where you swipe to turn the pages.
+- **Four places at the bottom:** Today (a quiet home with a featured memory and recent pages), Journal (all pages, or a calendar), Photos, and Contents (the chapters, search and settings).
+- **Read like a book.** Swipe or tap Earlier / Later to turn the pages.
 - **Search** by words, titles, dates (e.g. `28.09`), moods or collections.
 - **Private.** Locked with a PIN or Face ID, and it locks every time you leave the app.
 - **Backups.** Export everything (pages + original photos) as one `.zip` file and save it in iCloud Drive. You can restore it on any phone.
@@ -61,10 +62,10 @@ python3 -m http.server 8000
 | File | What's in it |
 | --- | --- |
 | `index.html` | The page skeleton and the lock screen |
-| `css/styles.css` | All colours, fonts and layout. The colours are at the top (`--brown`, `--gold`, …) |
+| `css/styles.css` | The whole design system: colours at the top (`--walnut`, `--caramel`, `--gold`, `--paper`, …), then type, layout and every screen |
 | `js/content.js` | **The easiest place to start:** moods, writing prompts, starting collections |
 | `js/app.js` | Starts the app and decides which screen to show |
-| `js/views.js` | All the screens: contents, chapters, reader, calendar, timeline, gallery, settings |
+| `js/views.js` | All the screens: Today, Journal, calendar, Photos, Contents, chapters, reader, search, settings |
 | `js/editor.js` | Writing a page, including gluing photos between paragraphs |
 | `js/db.js` | Saving on the phone with IndexedDB (think of it as a small database with tables) |
 | `js/photos.js` | Saving photos and making small preview copies |
@@ -72,8 +73,8 @@ python3 -m http.server 8000
 | `js/backup.js` | Export and import of the `.zip` backup |
 | `sw.js` | The service worker that makes the app work offline |
 
-After you change something, bump the version in `sw.js` (`little-memories-v1` → `v2`) so your phone picks up the new version. Close and reopen the app once or twice to see it.
+After you change something, bump the version in `sw.js` (e.g. `little-memories-v2` → `v3`) so your phone picks up the new version. Close and reopen the app once or twice to see it.
 
 ## Fonts
 
-Cormorant Garamond, Nunito Sans and Lora, all under the SIL Open Font License (see `fonts/`).
+Newsreader (titles and quotes) and Hanken Grotesk (writing, reading and navigation), both under the SIL Open Font License (see `fonts/`).

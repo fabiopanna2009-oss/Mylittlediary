@@ -206,6 +206,7 @@ export async function lockNow() {
   locked = true;
   document.body.classList.add('is-locked');
   $('lock').classList.add('show');
+  $('lock-book').textContent = await db.getSetting('bookTitle', 'Little Memories') || 'Little Memories';
   setMode((await db.getSetting('pinHash')) ? 'unlock' : 'setup');
   setHint('');
   $('btn-faceid').hidden = mode !== 'unlock' || !(await faceIdEnabled());
@@ -250,5 +251,5 @@ export async function initLock(onUnlock) {
 
   await lockNow();
   const hasPin = await db.getSetting('pinHash');
-  if (!hasPin) setHint('Only you will know it. There is no way to recover it.');
+  if (!hasPin) setHint('Four digits only you know. It can’t be recovered, so keep it safe.');
 }

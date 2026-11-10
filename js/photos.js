@@ -1,5 +1,5 @@
 // photos.js — saving pictures and showing them.
-// The ORIGINAL picture is always kept unchanged. The vintage look is only a visual effect (CSS),
+// The ORIGINAL picture is always kept unchanged and shown as it is (no filters).
 // and we also keep a small "thumb" copy so the gallery loads fast.
 
 import { db } from './db.js';
@@ -68,12 +68,33 @@ export function forgetPhotoURL(id) {
 // <img> that fills itself in once the picture is loaded from the database.
 export function photoImg(id, size = 'full', className = '') {
   const img = document.createElement('img');
-  img.className = className;
+  if (className) img.className = className;
   img.alt = '';
   img.decoding = 'async';
   img.loading = 'lazy';
   photoURL(id, size).then((url) => { if (url) img.src = url; });
   return img;
+}
+
+// A printed photograph: the picture with a thin white border.
+// Upright (portrait) photos are placed a little narrower, alternating left and right,
+// the way you would glue them into a real journal.
+export function printFigure(id, { alt = false, caption = null } = {}) {
+  const img = photoImg(id, 'full');
+  const frame = document.createElement('div');
+  frame.className = 'print-frame';
+  frame.append(img);
+  const figure = document.createElement('figure');
+  figure.className = 'print';
+  figure.append(frame);
+  if (caption) figure.append(caption);
+  img.addEventListener('load', () => {
+    if (img.naturalHeight > img.naturalWidth * 1.08) {
+      figure.classList.add('portrait');
+      if (alt) figure.classList.add('alt');
+    }
+  });
+  return { figure, frame, img };
 }
 
 // Delete pictures that no page uses anymore (e.g. after a photo was removed from a page).

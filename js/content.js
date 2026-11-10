@@ -3,22 +3,22 @@
 
 // The different kinds of pages in the book.
 export const KINDS = {
-  entry:   { label: 'Journal',          one: 'Journal page',    emptyTitle: 'Untitled page' },
-  thought: { label: "Today's thoughts", one: 'Thought',         emptyTitle: 'A thought' },
-  letter:  { label: 'Letters',          one: 'Letter',          emptyTitle: 'An unsent letter' },
-  memory:  { label: 'Memories',         one: 'Memory',          emptyTitle: 'A memory' },
-  detail:  { label: 'Little details',   one: 'Little detail',   emptyTitle: 'A little detail' },
+  entry:   { label: 'Pages',            one: 'A page',          emptyTitle: 'Untitled' },
+  thought: { label: 'Thoughts',         one: 'A thought',       emptyTitle: 'A thought' },
+  letter:  { label: 'Letters',          one: 'A letter',        emptyTitle: 'An unsent letter' },
+  memory:  { label: 'Memories',         one: 'A memory',        emptyTitle: 'A memory' },
+  detail:  { label: 'Details',          one: 'A little detail', emptyTitle: 'A little detail' },
 };
 
-// Moods are feelings, not scores.
+// Moods are feelings, not scores. Shown as words, quietly.
 export const MOODS = [
-  { id: 'happy',     emoji: '☀️', label: 'Happy' },
-  { id: 'calm',      emoji: '🌿', label: 'Calm' },
-  { id: 'grateful',  emoji: '🤍', label: 'Grateful' },
-  { id: 'nostalgic', emoji: '🍂', label: 'Nostalgic' },
-  { id: 'longing',   emoji: '🌙', label: 'Longing' },
-  { id: 'sad',       emoji: '🌧️', label: 'Sad' },
-  { id: 'tired',     emoji: '☁️', label: 'Tired' },
+  { id: 'happy',     label: 'Happy' },
+  { id: 'calm',      label: 'Calm' },
+  { id: 'grateful',  label: 'Grateful' },
+  { id: 'nostalgic', label: 'Nostalgic' },
+  { id: 'longing',   label: 'Longing' },
+  { id: 'sad',       label: 'Sad' },
+  { id: 'tired',     label: 'Tired' },
 ];
 
 export const moodById = (id) => MOODS.find((m) => m.id === id) || null;

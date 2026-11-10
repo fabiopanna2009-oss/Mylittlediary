@@ -1,13 +1,13 @@
 {
   "name": "Little Memories",
   "short_name": "Memories",
-  "description": "A private diary that lives only on your phone.",
+  "description": "A private journal that lives only on your phone.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f3ead9",
-  "theme_color": "#f3ead9",
+  "background_color": "#f7f2e9",
+  "theme_color": "#f7f2e9",
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
