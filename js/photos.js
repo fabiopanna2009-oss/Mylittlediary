@@ -1,6 +1,6 @@
 // photos.js — saving pictures and showing them.
 // The ORIGINAL picture is always kept unchanged and shown as it is (no filters).
-// and we also keep a small "thumb" copy so the gallery loads fast.
+// We also keep a small "thumb" copy so lists and the gallery load fast.
 
 import { db } from './db.js';
 import { uid } from './util.js';
