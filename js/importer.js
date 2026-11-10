@@ -19,12 +19,19 @@
 //       }
 //     ],
 //     "collections": [ { "name": "…", "description": "…" } ],   (optional)
-//     "words": ["a word", "a sentence that matters"]             (optional)
+//     "words": ["a word", "a sentence that matters"],            (optional)
+//     "questions": [                                             (optional: questions for the door)
+//       { "question": "Where did the trail end?", "keywords": ["the top", "summit"] }
+//     ]
 //   }
+//
+// Questions for the door: the key words are scrambled the moment they are imported
+// (see js/lock.js). Delete the text or file you imported them from afterwards.
 
 import { db } from './db.js';
 import { uid } from './util.js';
 import { derive } from './notes.js';
+import { getGate, addQuestion, setGateEnabled } from './lock.js';
 
 // The instructions you give ChatGPT once. They contain nothing personal.
 export const CHATGPT_INSTRUCTIONS = `I keep a private journal in an app called Little Memories. Whenever I say "export to Little Memories", turn what we talked about into notes for that app.
@@ -138,12 +145,16 @@ export function parseImport(pasted) {
     .filter((c) => c.name);
   const words = (Array.isArray(data.words) ? data.words : []).map((w) => clean(w, 140)).filter(Boolean);
 
-  if (!notes.length && !collections.length && !words.length) throw new Error('There is nothing in this export: no notes, collections or words.');
-  return { notes, collections, words };
+  const questions = (Array.isArray(data.questions) ? data.questions : [])
+    .map((q) => ({ text: clean(q?.question ?? q?.text, 140), keywords: (Array.isArray(q?.keywords) ? q.keywords : []).map((k) => clean(k, 80)).filter(Boolean) }))
+    .filter((q) => q.text && q.keywords.length);
+
+  if (!notes.length && !collections.length && !words.length && !questions.length) throw new Error('There is nothing in this export: no notes, collections, words or questions.');
+  return { notes, collections, words, questions };
 }
 
 // Save what was parsed. Returns how much was really added (things you already have are skipped).
-export async function applyImport({ notes, collections, words }) {
+export async function applyImport({ notes, collections, words, questions = [] }) {
   const now = Date.now();
   const mine = await db.allCollections();
   const byName = new Map(mine.map((c) => [c.name.trim().toLowerCase(), c]));
@@ -189,5 +200,19 @@ export async function applyImport({ notes, collections, words }) {
   if (newCollections.length) await db.saveCollections(newCollections);
   if (toSave.length) await db.saveEntries(toSave);
   if (newWords.length) await db.setSetting('words', [...myWords, ...newWords].join('\n'));
-  return { notes: toSave.length, skipped: notes.length - toSave.length, collections: newCollections.filter((c) => !mine.includes(c)).length, words: newWords.length };
+  // Questions for the door. One you already have (same wording) is not added twice.
+  // If these are your first questions, the journal starts asking them (the PIN keeps working).
+  let newQuestions = 0;
+  if (questions.length) {
+    const gate = await getGate();
+    const hadNone = gate.questions.length === 0;
+    const known = new Set(gate.questions.map((q) => q.text.trim().toLowerCase()));
+    for (const q of questions) {
+      if (known.has(q.text.trim().toLowerCase())) continue;
+      if (await addQuestion(q.text, q.keywords)) { newQuestions++; known.add(q.text.trim().toLowerCase()); }
+    }
+    if (hadNone && newQuestions) await setGateEnabled(true);
+  }
+
+  return { notes: toSave.length, skipped: notes.length - toSave.length, collections: newCollections.filter((c) => !mine.includes(c)).length, words: newWords.length, questions: newQuestions };
 }

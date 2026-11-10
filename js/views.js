@@ -21,7 +21,7 @@ import { CHATGPT_INSTRUCTIONS, parseImport, applyImport } from './importer.js';
 import { changePin, faceIdSupported, faceIdEnabled, enableFaceId, disableFaceId, getGate, addQuestion, removeQuestion, setGateEnabled } from './lock.js';
 import { createBackup, shareBackup, importBackup } from './backup.js';
 
-export const APP_VERSION = '4.13.0';
+export const APP_VERSION = '4.14.0';
 
 // ================= shared pieces =================
 
@@ -984,7 +984,12 @@ export async function renderSettings(root, nav) {
             parsed.notes.length ? plural2(parsed.notes.length, 'note', 'notes') : null,
             parsed.collections.length ? plural2(parsed.collections.length, 'collection', 'collections') : null,
             parsed.words.length ? plural2(parsed.words.length, 'word or sentence', 'words and sentences') : null,
+            parsed.questions.length ? plural2(parsed.questions.length, 'question for the door', 'questions for the door') : null,
           ].filter(Boolean).join(' · ')),
+          parsed.questions.length ? h('ul', { class: 'import-list' }, parsed.questions.map((q) => h('li', {},
+            h('strong', {}, q.text),
+            h('span', {}, `${q.keywords.length} key ${q.keywords.length === 1 ? 'word' : 'words'} (hidden here, scrambled when added)`),
+          ))) : null,
           parsed.notes.length ? h('ul', { class: 'import-list' }, parsed.notes.map((n) => h('li', {},
             h('strong', {}, n.title || 'Untitled'),
             h('span', {}, [
@@ -997,8 +1002,8 @@ export async function renderSettings(root, nav) {
             onclick: async () => {
               const r = await applyImport(parsed);
               close();
-              toast(r.notes || r.words || r.collections
-                ? `Added ${[r.notes ? `${r.notes} ${r.notes === 1 ? 'note' : 'notes'}` : null, r.collections ? `${r.collections} ${r.collections === 1 ? 'collection' : 'collections'}` : null, r.words ? `${r.words} ${r.words === 1 ? 'word' : 'words'}` : null].filter(Boolean).join(', ')}${r.skipped ? ` (${r.skipped} already there)` : ''}`
+              toast(r.notes || r.words || r.collections || r.questions
+                ? `Added ${[r.notes ? `${r.notes} ${r.notes === 1 ? 'note' : 'notes'}` : null, r.collections ? `${r.collections} ${r.collections === 1 ? 'collection' : 'collections'}` : null, r.words ? `${r.words} ${r.words === 1 ? 'word' : 'words'}` : null, r.questions ? `${r.questions} ${r.questions === 1 ? 'question' : 'questions'}` : null].filter(Boolean).join(', ')}${r.skipped ? ` (${r.skipped} already there)` : ''}`
                 : 'Everything was already in your journal');
               window.dispatchEvent(new CustomEvent('notes-changed', { detail: {} }));
               renderSettings(root, nav);

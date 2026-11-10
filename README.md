@@ -79,6 +79,8 @@ Rules:
 
 </details>
 
+The same import also accepts questions for the door: `"questions": [{ "question": "…", "keywords": ["…"] }]`. The key words are scrambled as they are imported; delete the text you pasted them from afterwards.
+
 Drawings made elsewhere go in through **Settings → Your drawings**, photographs through the photo button inside a note.
 
 ## Putting it on your iPhone
