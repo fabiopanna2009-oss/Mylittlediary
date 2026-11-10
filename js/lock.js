@@ -7,6 +7,7 @@
 // iOS shows the Face ID prompt for us. If it ever doesn't work, the PIN always works.
 
 import { db } from './db.js';
+import { ridge, wordScatter } from './drawings.js';
 
 const PIN_LENGTH = 4;
 const MAX_TRIES = 5;
@@ -198,6 +199,20 @@ function unlock() {
   onUnlockCallback();
 }
 
+// The lock screen is a page of the notebook too: your words (if you allow it), drawings and the mountain.
+// Photographs are never shown here, because this screen is visible before the PIN is entered.
+let lockPageShown = false;
+async function drawLockPage() {
+  const showWords = await db.getSetting('lockWords', true);
+  const words = showWords === false ? [] : (await db.getSetting('words', '') || '').split('\n').map((w) => w.trim()).filter(Boolean).slice(0, window.innerWidth >= 900 ? 14 : 7); // fewer on a phone, so nothing is cut off
+  const deco = $('lock-deco');
+  deco.replaceChildren(wordScatter(words));
+  $('lock-ridge').replaceChildren(ridge(''));
+  // the page writes itself in the first time it is shown
+  $('lock').classList.toggle('intro', !lockPageShown);
+  lockPageShown = true;
+}
+
 // ---------- Public ----------
 export function isLocked() { return locked; }
 
@@ -208,6 +223,7 @@ export async function lockNow() {
   $('lock').classList.add('show');
   $('lock-book').textContent = await db.getSetting('bookTitle', 'Little Memories') || 'Little Memories';
   $('lock-motto').textContent = await db.getSetting('motto', '') || '';
+  await drawLockPage();
   setMode((await db.getSetting('pinHash')) ? 'unlock' : 'setup');
   setHint('');
   $('btn-faceid').hidden = mode !== 'unlock' || !(await faceIdEnabled());

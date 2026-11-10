@@ -9,7 +9,12 @@ export function h(tag, attrs = {}, ...children) {
     if (value === false || value === null || value === undefined) continue;
     if (key.startsWith('on') && typeof value === 'function') el.addEventListener(key.slice(2), value);
     else if (key === 'class') el.className = value;
-    else if (key === 'style' && typeof value === 'object') Object.assign(el.style, value);
+    else if (key === 'style' && typeof value === 'object') {
+      // CSS variables (--name) need setProperty; normal properties can be assigned directly
+      for (const [prop, v] of Object.entries(value)) {
+        if (prop.startsWith('--')) el.style.setProperty(prop, v); else el.style[prop] = v;
+      }
+    }
     else if (key === 'dataset') Object.assign(el.dataset, value);
     // Properties like value, checked, placeholder are set directly (a <textarea> ignores a "value" attribute).
     else if (key in el) el[key] = value;

@@ -6,6 +6,8 @@ The simplicity of Apple Notes with the feeling of opening your own school notebo
 
 **Make it yours** (in Settings): your own title, a line under the title, a date that matters (marked at the top of the mountain), and *words that matter*: nicknames, phrases, places. They are scribbled across the first page between small pen drawings and a spiral of your photographs, and the page writes itself in when you open the journal. All of this is saved only on your device, never in this code.
 
+**The opening.** After the PIN, the journal opens with your words writing themselves in, a few of your photographs landing on the page and one line from one of your notes, different each time (tap to skip, or turn it off in Settings). The lock screen itself shows your words, drawings and the mountain, but never photographs, and the words can be hidden there with a switch.
+
 **Your journal lives only on your phone.** This repository contains just the empty app (the code). None of your notes, photos or names are ever stored here or sent anywhere.
 
 ## What it can do
@@ -76,6 +78,7 @@ python3 -m http.server 8000
 | `js/app.js` | Starts the app and decides which screen to show |
 | `js/views.js` | The screens: Home, Notes, Memories, a collection, Photographs, Search, Settings |
 | `js/editor.js` | Writing a note: formatting, checklists, photographs, autosave |
+| `js/drawings.js` | The hand-drawn parts: the mountain ridge, pen doodles, your words scribbled on a page |
 | `js/notes.js` | What a note is, cleaning its HTML, and upgrading notes from older versions |
 | `js/db.js` | Saving on the phone with IndexedDB (think of it as a small database with tables) |
 | `js/photos.js` | Saving photos and making small preview copies |

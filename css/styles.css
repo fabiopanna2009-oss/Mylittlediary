@@ -970,6 +970,100 @@ a.note-meta-item:active { opacity: 0.6; }
 @keyframes placeIn { from { opacity: 0; transform: translate(-50%, -50%) rotate(var(--tilt, 0deg)) scale(0.6); } }
 @keyframes fadeIn { from { opacity: 0; } }
 
+/* the lock screen is a notebook page too: words and drawings above, the mountain along the bottom */
+.lock { overflow: hidden; }
+.lock-inner { position: relative; z-index: 1; }
+.lock-deco { width: 100%; max-width: 420px; margin-bottom: 14px; flex: 0 0 auto; }
+.lock-deco .scatter { gap: 0 14px; }
+.lock-deco .scribble { font-size: 25px; }
+.lock-deco .scribble.big { font-size: 36px; }
+.lock-deco .scribble.s1 { font-size: 16px; }
+.lock-deco .scribble.s2 { font-size: 22px; }
+.lock-deco .scribble.s3 { font-size: 18px; }
+.lock-deco .doodle { width: 30px; height: 30px; }
+.lock-ridge { position: absolute; left: 0; right: 0; bottom: calc(var(--safe-bottom) - 6px); opacity: 0.4; pointer-events: none; }
+.lock-ridge .ridge { margin: 0; }
+.lock.intro .scribble { animation: writeIn 0.55s var(--ease) both; animation-delay: calc(0.2s + var(--i) * 0.09s); }
+.lock.intro .doodle path { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 0.8s ease-out forwards; animation-delay: calc(0.25s + var(--i) * 0.09s); }
+.lock.intro .ridge path:not(.trail):not(.flag) { stroke-dasharray: 700; stroke-dashoffset: 700; animation: drawLong 1.6s ease-out 0.1s forwards; }
+.lock.intro .ridge .trail, .lock.intro .ridge .flag { animation: fadeIn 0.6s ease-out 1.3s both; }
+@media (max-height: 700px) { .lock-deco { display: none; } .lock-book { font-size: 44px; } }
+
+@media (min-width: 900px) {
+  /* on a computer: the scribbled page on the left, the PIN on the right */
+  .lock { flex-direction: row; gap: 9vw; }
+  .lock-deco { max-width: 520px; margin: 0; }
+  .lock-deco .scatter { gap: 10px 26px; }
+  .lock-deco .scribble { font-size: 40px; }
+  .lock-deco .scribble.big { font-size: 62px; }
+  .lock-deco .scribble.s1 { font-size: 22px; }
+  .lock-deco .scribble.s2 { font-size: 33px; }
+  .lock-deco .scribble.s3 { font-size: 26px; }
+  .lock-deco .doodle { width: 52px; height: 52px; }
+  .lock-inner { margin: 0; }
+  .lock-ridge { opacity: 0.5; }
+  .lock-ridge .ridge svg { max-height: 30vh; }
+}
+
+/* the opening: plays once after the PIN */
+.opening {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: calc(var(--safe-top) + 20px) 22px calc(var(--safe-bottom) + 30px);
+  background-color: var(--paper);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: var(--square) var(--square);
+  cursor: pointer;
+  overflow: hidden;
+  transition: opacity 0.45s var(--ease);
+}
+.opening.leaving { opacity: 0; pointer-events: none; }
+.opening-title { font-family: var(--hand-title); font-size: 44px; line-height: 1; color: var(--pen); animation: fadeIn 0.6s ease-out both; }
+.opening .scatter { max-width: 560px; gap: 2px 18px; }
+.opening .scribble { font-size: 30px; animation: writeIn 0.5s var(--ease) both; animation-delay: calc(0.45s + var(--i) * 0.07s); }
+.opening .scribble.big { font-size: 44px; }
+.opening .scribble.s1 { font-size: 18px; }
+.opening .scribble.s2 { font-size: 25px; }
+.opening .scribble.s3 { font-size: 21px; }
+.opening .doodle { width: 34px; height: 34px; }
+.opening .doodle path { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 0.8s ease-out forwards; animation-delay: calc(0.5s + var(--i) * 0.07s); }
+.opening-pile { position: relative; width: min(86vw, 46vh, 430px); aspect-ratio: 1; flex: 0 0 auto; }
+.opening-photo {
+  position: absolute;
+  width: 50%;
+  margin: 0;
+  padding: 5px 5px 4px;
+  background: var(--mat);
+  box-shadow: 0 2px 4px rgba(42, 32, 26, 0.22), 0 10px 24px rgba(42, 32, 26, 0.12);
+  transform: translate(-50%, -50%) rotate(var(--tilt));
+  animation: dropIn 0.6s var(--ease) both;
+}
+.opening-photo img { width: 100%; height: auto; max-height: 30vh; object-fit: cover; }
+.opening-photo figcaption { padding-top: 3px; font-family: var(--hand); font-size: 13px; line-height: 1.2; color: #6a4a2c; text-align: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.opening-quote { max-width: 30em; margin: 4px 0 0; font-family: var(--hand); font-weight: 300; font-size: 20px; line-height: 1.35; color: var(--ink-2); text-align: center; animation: fadeIn 0.9s ease-out both; }
+.opening-quote-date { display: block; margin-top: 4px; font-size: 14px; color: var(--caramel); }
+.opening-hint { position: absolute; bottom: calc(var(--safe-bottom) + 14px); font-family: var(--hand); font-size: 14px; color: var(--ink-3); animation: fadeIn 0.8s ease-out both; }
+@keyframes dropIn { from { opacity: 0; transform: translate(-50%, -62%) rotate(calc(var(--tilt) * 2.4)) scale(1.18); } }
+@media (min-width: 900px) {
+  .opening { gap: 20px; }
+  .opening-title { font-size: 60px; }
+  .opening .scatter { max-width: 760px; gap: 6px 26px; }
+  .opening .scribble { font-size: 38px; }
+  .opening .scribble.big { font-size: 58px; }
+  .opening .scribble.s1 { font-size: 22px; }
+  .opening .scribble.s2 { font-size: 31px; }
+  .opening .scribble.s3 { font-size: 26px; }
+  .opening .doodle { width: 46px; height: 46px; }
+  .opening-pile { width: min(46vh, 480px); }
+  .opening-quote { font-size: 23px; }
+}
+
 /* details beside the note (only on wide screens, see below) */
 .note-side { display: none; }
 

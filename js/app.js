@@ -19,7 +19,7 @@ import { initLock, lockNow, isLocked } from './lock.js';
 import { renderEditor, closeEditor, saveCurrent } from './editor.js';
 import {
   renderHome, renderNotes, renderMemories, renderPhotos, renderCollection, renderSearch, renderSettings, openNotePhoto,
-  renderSidebar, renderListPane, renderNotesPlaceholder,
+  renderSidebar, renderListPane, renderNotesPlaceholder, playOpening,
 } from './views.js';
 import { cleanUpUnusedPhotos } from './photos.js';
 
@@ -196,7 +196,16 @@ async function start() {
 
   window.addEventListener('hashchange', route);
 
-  await initLock(() => {
+  let firstUnlock = true;
+  await initLock(async () => {
+    // The first time the journal is unlocked after opening the app, the memories play.
+    if (firstUnlock) {
+      firstUnlock = false;
+      const played = playOpening();
+      route(); // the first page is drawn underneath meanwhile
+      if (await played) introPending = false;
+      return;
+    }
     if (editorOpen && root.querySelector('.editor')) return;              // still writing: carry on
     if (root.childElementCount && lastDrawn === (location.hash || '#/')) return; // same screen as before
     if (location.hash.startsWith('#/new')) nav.tab('');                    // reopened on an unsaved new note

@@ -15,10 +15,11 @@ import {
 } from './util.js';
 import { noteTitle, noteExcerpt, noteWhen } from './notes.js';
 import { photoImg, photoURL } from './photos.js';
+import { ridge, wordScatter } from './drawings.js';
 import { changePin, faceIdSupported, faceIdEnabled, enableFaceId, disableFaceId } from './lock.js';
 import { createBackup, shareBackup, importBackup } from './backup.js';
 
-export const APP_VERSION = '4.2.0';
+export const APP_VERSION = '4.4.0';
 
 // ================= shared pieces =================
 
@@ -109,66 +110,7 @@ function monthGroups(notes, nav, dateKey) {
   ));
 }
 
-// A ridge line drawn in pen: the mountain. The dotted line is the trail up, the flag marks the top.
-// If you set "a date that matters" in Settings, it is written next to the flag.
-function ridge(label = '') {
-  const el = h('div', { class: 'ridge', 'aria-hidden': 'true' });
-  el.innerHTML = `<svg viewBox="0 0 360 92" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-    <path class="back" stroke-width="1.1" d="M-4 74c22-3 37-15 58-21 14-4 22 5 37-2 19-9 28-27 46-30 12-2 17 9 30 10 18 1 26-15 44-17 14-2 21 12 35 16 16 5 27-3 42 3 21 8 44 19 78 24"/>
-    <path stroke-width="1.7" d="M-4 86c17-1 30-6 44-13 13-6 20-3 31-10 15-10 21-24 37-33 9-5 13 3 22-3 12-8 19-17 31-19 8-1 10 6 17 11 10 7 15 3 25 10 13 9 20 20 35 24 12 3 18-2 31 3 19 7 38 17 95 26"/>
-    <path class="trail" stroke-width="1.2" stroke-dasharray="1.5 5.5" d="M46 80c14-7 25-9 36-19 13-12 21-25 34-31 12-5 19-2 30-12 6-5 10-8 15-9"/>
-    <path class="flag" stroke-width="1.3" d="M163 8.5v-12M163 -3.5l9 3.2-9 3.2z"/>
-  </svg>`;
-  if (label) el.append(h('span', { class: 'ridge-label' }, label));
-  return el;
-}
-
-// ---------- the first page: your words, small drawings, and a spiral of photographs ----------
-
-// Pen doodles of ordinary things. Each is one or two wobbly strokes, drawn as if in a notebook margin.
-const DOODLES = {
-  mountain: '<path d="M4 34c6-4 9-11 14-17 3-4 5 1 8-3 3-5 5-9 8-9s5 6 9 11c4 5 8 11 14 16"/><path d="M30 9l3 4 3-3"/>',
-  bottle: '<path d="M21 6h10M22 6c0 5-6 7-6 14v20c0 3 2 4 5 4h10c3 0 5-1 5-4V20c0-7-6-9-6-14"/><path d="M16 25c7 2 13 2 20 0M16 33c7 2 13 2 20 0"/>',
-  ball: '<path d="M26 6c11 0 20 9 20 20s-9 20-20 20S6 37 6 26 15 6 26 6z"/><path d="M26 17l8 6-3 10H21l-3-10zM26 17V7M34 23l10-3M31 33l6 9M21 33l-6 9M18 23L8 20"/>',
-  bike: '<path d="M13 33a8 8 0 1 0 .1 0M41 33a8 8 0 1 0 .1 0"/><path d="M13 41l9-17h14l5 17M22 24l8 17M36 24l-6 17M19 20h6M36 24l-2-6h5"/>',
-  star: '<path d="M26 5l5 14 15 1-12 9 4 15-12-9-12 9 4-15L6 20l15-1z"/>',
-  bracelet: '<path d="M26 8c11 0 19 7 19 17s-8 19-19 19S7 36 7 26 15 8 26 8z"/><path d="M11 17l2 1M17 11l1 2M35 11l-1 2M41 17l-2 1M44 27h-2M40 37l-2-1M12 37l2-1M8 27h2"/><path d="M22 41h8v7h-8z"/>',
-  hairtie: '<path d="M10 26c0-9 7-15 16-15s17 6 17 14-8 16-17 16-16-6-16-15z"/><path d="M14 26c0-7 5-11 12-11s13 4 13 10-6 12-13 12-12-5-12-11z"/><path d="M41 18c3-1 6 1 6 4"/>',
-  sock: '<path d="M18 6h14v22l11 8c3 2 3 6 0 8-3 1-6 1-9-1L18 33z"/><path d="M18 12h14M18 17h14"/>',
-  worm: '<path d="M6 30c4-10 9-10 12 0s8 10 11 0 8-10 11 0 6 8 8 3"/><path d="M8 27l-2-1"/>',
-  note: '<path d="M20 38V12l20-5v26"/><path d="M20 38c0 3-3 5-6 5s-6-2-6-5 3-5 6-5 6 2 6 5zM40 33c0 3-3 5-6 5s-6-2-6-5 3-5 6-5 6 2 6 5z"/>',
-  heart: '<path d="M26 44C12 34 6 26 6 18c0-6 4-10 10-10 4 0 8 3 10 7 2-4 6-7 10-7 6 0 10 4 10 10 0 8-6 16-20 26z"/>',
-};
-const DOODLE_ORDER = ['mountain', 'bottle', 'ball', 'star', 'bracelet', 'bike', 'hairtie', 'worm', 'sock', 'note', 'heart'];
-
-function doodle(name, i) {
-  const el = h('span', { class: 'doodle', 'aria-hidden': 'true', style: { '--i': String(i), '--tilt': `${((i * 37) % 17) - 8}deg` } });
-  el.innerHTML = `<svg viewBox="0 0 52 52" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" pathLength="1">${DOODLES[name].replace(/<path /g, '<path pathLength="1" ')}</svg>`;
-  return el;
-}
-
-// A small number from a word, always the same for the same word (so the page doesn't reshuffle).
-function wordNumber(word) {
-  let n = 7;
-  for (const ch of word) n = (n * 31 + ch.codePointAt(0)) % 9973;
-  return n;
-}
-
-// Your words, scattered like scribbles on a page, with drawings in between.
-function wordScatter(words) {
-  const items = [];
-  let drawn = 0; // each drawing appears once before any repeats
-  words.forEach((word, i) => {
-    const n = wordNumber(word);
-    items.push(h('span', {
-      class: `scribble s${n % 4} ${word.length <= 10 && n % 3 === 0 ? 'big' : ''}`,
-      style: { '--i': String(items.length), '--tilt': `${(n % 13) - 6}deg`, '--nudge': `${(n % 15) - 7}px` },
-    }, word));
-    if (i % 2 === 1 || words.length < 5) items.push(doodle(DOODLE_ORDER[drawn++ % DOODLE_ORDER.length], items.length));
-  });
-  if (!words.length) DOODLE_ORDER.slice(0, 7).forEach((d, i) => items.push(doodle(d, i)));
-  return h('div', { class: 'scatter' }, items);
-}
+// ---------- the first page: a spiral of photographs (words and drawings live in drawings.js) ----------
 
 // Photographs winding inwards along a spiral. The newest is on the outside.
 function photoSpiral(items, nav, collections) {
@@ -303,6 +245,69 @@ export async function renderHome(root, nav, { intro = false } = {}) {
       h('span', {}, 'Back up now'),
     ) : null,
   ));
+}
+
+// ================= THE OPENING (plays once after the PIN) =================
+// Your words write themselves in, a few photographs land on the page, and one line from a note appears.
+// Different photographs and a different line each time. Tap anywhere to skip.
+
+const PILE = [ // where each photograph lands: x, y (percent from the middle), tilt
+  [-17, -13, -7], [18, -9, 6], [-6, 9, -3], [21, 13, 9], [-21, 15, -10], [3, -1, 4],
+];
+
+function shuffled(list) {
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+
+export async function playOpening() {
+  if (await db.getSetting('opening', true) === false) return false;
+  const [notes, bookTitle, wordsText] = await Promise.all([db.allEntries(), db.getSetting('bookTitle', 'Little Memories'), db.getSetting('words', '')]);
+  const words = (wordsText || '').split('\n').map((w) => w.trim()).filter(Boolean);
+  const photos = shuffled(notes.flatMap((n) => (n.photos || []).map((p) => ({ ...p, note: n })))).slice(0, PILE.length);
+  const lines = notes.map((n) => ({ n, line: (n.text || '').split('\n').find((l) => l.trim().length > 12 && l.trim().length < 150) })).filter((x) => x.line);
+  const quote = lines.length ? lines[Math.floor(Math.random() * lines.length)] : null;
+  if (!words.length && !photos.length && !quote) return false; // nothing to show yet
+
+  const wordsDone = 0.5 + Math.min(words.length, 12) * 0.14;          // seconds until the words are written
+  const photosDone = wordsDone + 0.3 + photos.length * 0.55;          // …until the last photograph has landed
+  const total = photosDone + (quote ? 2.6 : 1.4);
+
+  const pile = h('div', { class: 'opening-pile' }, photos.map((p, i) => {
+    const [x, y, tilt] = PILE[i];
+    return h('figure', { class: 'opening-photo', style: { left: `${50 + x}%`, top: `${50 + y}%`, '--tilt': `${tilt}deg`, animationDelay: `${wordsDone + 0.3 + i * 0.55}s` } },
+      photoImg(p.photoId, 'thumb'),
+      (p.caption || p.date) ? h('figcaption', {}, p.caption || fmt.medium(p.date)) : null);
+  }));
+
+  const overlay = h('div', { class: 'opening', role: 'button', 'aria-label': 'Open the journal' },
+    h('div', { class: 'opening-title' }, bookTitle || 'Little Memories'),
+    words.length ? wordScatter(shuffled(words).slice(0, 12)) : null,
+    photos.length ? pile : null,
+    quote ? h('p', { class: 'opening-quote', style: { animationDelay: `${photosDone + 0.2}s` } },
+      `“${quote.line.trim()}”`,
+      h('span', { class: 'opening-quote-date' }, noteWhen(quote.n, 'short'))) : null,
+    h('span', { class: 'opening-hint', style: { animationDelay: `${Math.min(total - 0.6, 3)}s` } }, 'tap to open'),
+  );
+  overlay.style.setProperty('--word-step', '0.14s');
+
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      overlay.classList.add('leaving');
+      setTimeout(() => overlay.remove(), 450);
+      resolve(true);
+    };
+    overlay.addEventListener('click', finish);
+    document.addEventListener('keydown', function onKey() { document.removeEventListener('keydown', onKey); finish(); });
+    // if the app goes to the background while this plays, end it
+    document.addEventListener('visibilitychange', function onHide() { if (document.visibilityState === 'hidden') { document.removeEventListener('visibilitychange', onHide); finish(); } });
+    setTimeout(finish, total * 1000);
+    document.body.append(overlay);
+  });
 }
 
 // ================= NOTES =================
@@ -740,6 +745,8 @@ export async function renderSearch(root, nav) {
 
 export async function renderSettings(root, nav) {
   const [motto, specialDate, specialLabel, wordsText] = await Promise.all([db.getSetting('motto', ''), db.getSetting('specialDate', ''), db.getSetting('specialLabel', ''), db.getSetting('words', '')]);
+  const lockWords = await db.getSetting('lockWords', true);
+  const openingOn = await db.getSetting('opening', true);
   const [bookTitle, writingFont, lastBackup, notes, photoIds, canFaceId, hasFaceId] = await Promise.all([
     db.getSetting('bookTitle', 'Little Memories'),
     db.getSetting('writingFont', 'clean'),
@@ -836,6 +843,10 @@ export async function renderSettings(root, nav) {
           })),
         textRow('What that day is', 'specialLabel', specialLabel, 'A word or two'),
         h('label', { class: 'set-row' }, h('span', {}, 'Writing font'), fontSelect),
+        h('label', { class: 'set-row' },
+          h('span', {}, 'Play memories when opening'),
+          h('input', { type: 'checkbox', class: 'switch', checked: openingOn !== false, onchange: async (e) => { await db.setSetting('opening', e.target.checked); toast('Saved'); } }),
+        ),
       ),
       h('section', { class: 'set-group' },
         h('h2', { class: 'eyebrow' }, 'Words that matter'),
@@ -845,12 +856,17 @@ export async function renderSettings(root, nav) {
           onchange: async (e) => { await db.setSetting('words', e.target.value); toast('Saved'); },
         }),
       ),
-      h('p', { class: 'set-note' }, 'These are scribbled across the first page, between small drawings and a spiral of your photographs. Everything here is saved only on this device: the line appears under the title, and the date is marked at the top of the mountain.'),
+      h('p', { class: 'set-note' }, 'After the PIN, the journal opens with your words, a few of your photographs and a line from one of your notes, different each time (tap to skip). Your words are also scribbled across the first page, between small drawings and a spiral of your photographs. Everything here is saved only on this device: the line appears under the title, and the date is marked at the top of the mountain.'),
       group('Privacy',
         h('button', { class: 'set-row', onclick: async () => { if (await changePin()) toast('PIN changed'); } }, h('span', {}, 'Change PIN'), icon('chevron')),
         faceIdRow,
+        h('label', { class: 'set-row' },
+          h('span', {}, 'Show my words on the lock screen'),
+          h('input', { type: 'checkbox', class: 'switch', checked: lockWords !== false, onchange: async (e) => { await db.setSetting('lockWords', e.target.checked); toast('Saved'); } }),
+        ),
         h('button', { class: 'set-row', onclick: () => nav.lock() }, h('span', {}, 'Lock now'), icon('lock')),
       ),
+      h('p', { class: 'set-note' }, 'The lock screen can be seen before the PIN is entered. It shows your title, your words and small drawings, never photographs. Turn the switch off to keep the words hidden there too.'),
       h('p', { class: 'set-note' }, canFaceId
         ? 'The journal locks every time you leave the app. Face ID uses a passkey saved in your iPhone’s Passwords app.'
         : 'The journal locks every time you leave the app. Face ID becomes available when the journal is opened from your Home Screen.'),
