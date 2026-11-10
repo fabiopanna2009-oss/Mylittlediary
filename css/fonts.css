@@ -1,27 +1,24 @@
 /* Fonts are stored inside the app (folder /fonts), so they also work offline.
-   Both are variable fonts: one file contains every weight. SIL Open Font License (see fonts/LICENSE-*.txt).
+   All are under the SIL Open Font License (see fonts/LICENSE-*.txt).
 
-   Newsreader       an editorial serif for titles, headings and quotes.
-                    It adjusts its letter shapes to the size it is used at ("optical size").
-   Hanken Grotesk   a calm, readable sans-serif for writing, body text and navigation. */
+   Reenie Beanie    a real ballpoint scrawl: the journal's title, collection names, note titles
+   Kalam            a readable pen hand: captions, dates, small handwritten labels
+   Hanken Grotesk   a calm sans-serif: the text you write and read, and the controls
+
+   To use YOUR OWN handwriting later: turn it into a font file (e.g. with calligraphr.com),
+   put the .woff2 into /fonts and change the first src line below. */
 
 @font-face {
-  font-family: "Newsreader";
+  font-family: "Hand Title";
   font-style: normal;
-  font-weight: 200 800;
+  font-weight: 400;
   font-display: swap;
-  src: url("../fonts/newsreader-latin-opsz-normal.woff2") format("woff2-variations"),
-       url("../fonts/newsreader-latin-opsz-normal.woff2") format("woff2");
+  src: url("../fonts/reenie-beanie-latin-400-normal.woff2") format("woff2");
 }
 
-@font-face {
-  font-family: "Newsreader";
-  font-style: italic;
-  font-weight: 200 800;
-  font-display: swap;
-  src: url("../fonts/newsreader-latin-opsz-italic.woff2") format("woff2-variations"),
-       url("../fonts/newsreader-latin-opsz-italic.woff2") format("woff2");
-}
+@font-face { font-family: "Hand"; font-style: normal; font-weight: 300; font-display: swap; src: url("../fonts/kalam-latin-300-normal.woff2") format("woff2"); }
+@font-face { font-family: "Hand"; font-style: normal; font-weight: 400; font-display: swap; src: url("../fonts/kalam-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Hand"; font-style: normal; font-weight: 700; font-display: swap; src: url("../fonts/kalam-latin-700-normal.woff2") format("woff2"); }
 
 @font-face {
   font-family: "Hanken Grotesk";

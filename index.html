@@ -11,14 +11,14 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Memories">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="theme-color" content="#f7f2e9" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#1c1511" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#fbf8f1" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1f1813" media="(prefers-color-scheme: dark)">
   <meta name="robots" content="noindex, nofollow">
 
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="preload" href="fonts/newsreader-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/reenie-beanie-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/hanken-grotesk-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/fonts.css">
   <link rel="stylesheet" href="css/styles.css">
@@ -45,7 +45,9 @@
   <!-- Lock screen (covers everything while locked) -->
   <section id="lock" class="lock show" aria-label="Locked">
     <div class="lock-inner">
-      <div id="lock-book" class="eyebrow lock-book">Little Memories</div>
+      <div id="lock-book" class="display lock-book">Little Memories</div>
+      <p id="lock-motto" class="lock-motto"></p>
+      <span class="stripes" aria-hidden="true"></span>
       <h1 id="lock-title" class="lock-title">Welcome back</h1>
       <p id="lock-hint" class="lock-hint">&nbsp;</p>
       <div id="pin-dots" class="pin-dots" aria-hidden="true"><span></span><span></span><span></span><span></span></div>

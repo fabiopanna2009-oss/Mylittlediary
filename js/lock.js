@@ -207,6 +207,7 @@ export async function lockNow() {
   document.body.classList.add('is-locked');
   $('lock').classList.add('show');
   $('lock-book').textContent = await db.getSetting('bookTitle', 'Little Memories') || 'Little Memories';
+  $('lock-motto').textContent = await db.getSetting('motto', '') || '';
   setMode((await db.getSetting('pinHash')) ? 'unlock' : 'setup');
   setHint('');
   $('btn-faceid').hidden = mode !== 'unlock' || !(await faceIdEnabled());

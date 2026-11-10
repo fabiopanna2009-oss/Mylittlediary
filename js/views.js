@@ -18,7 +18,7 @@ import { photoImg, photoURL } from './photos.js';
 import { changePin, faceIdSupported, faceIdEnabled, enableFaceId, disableFaceId } from './lock.js';
 import { createBackup, shareBackup, importBackup } from './backup.js';
 
-export const APP_VERSION = '3.1.0';
+export const APP_VERSION = '4.0.0';
 
 // ================= shared pieces =================
 
@@ -100,6 +100,20 @@ function monthGroups(notes, nav, dateKey) {
   ));
 }
 
+// A ridge line drawn in pen: the mountain. The dotted line is the trail up, the flag marks the top.
+// If you set "a date that matters" in Settings, it is written next to the flag.
+function ridge(label = '') {
+  const el = h('div', { class: 'ridge', 'aria-hidden': 'true' });
+  el.innerHTML = `<svg viewBox="0 0 360 92" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <path class="back" stroke-width="1.1" d="M-4 74c22-3 37-15 58-21 14-4 22 5 37-2 19-9 28-27 46-30 12-2 17 9 30 10 18 1 26-15 44-17 14-2 21 12 35 16 16 5 27-3 42 3 21 8 44 19 78 24"/>
+    <path stroke-width="1.7" d="M-4 86c17-1 30-6 44-13 13-6 20-3 31-10 15-10 21-24 37-33 9-5 13 3 22-3 12-8 19-17 31-19 8-1 10 6 17 11 10 7 15 3 25 10 13 9 20 20 35 24 12 3 18-2 31 3 19 7 38 17 95 26"/>
+    <path class="trail" stroke-width="1.2" stroke-dasharray="1.5 5.5" d="M46 80c14-7 25-9 36-19 13-12 21-25 34-31 12-5 19-2 30-12 6-5 10-8 15-9"/>
+    <path class="flag" stroke-width="1.3" d="M163 8.5v-12M163 -3.5l9 3.2-9 3.2z"/>
+  </svg>`;
+  if (label) el.append(h('span', { class: 'ridge-label' }, label));
+  return el;
+}
+
 // A collection as an entrance: a meaningful word you tap.
 function wordEntrance(c, notes, nav, extra = null) {
   const inside = notes.filter((n) => (n.collections || []).includes(c.id));
@@ -130,10 +144,13 @@ async function createCollection() {
 // ================= HOME =================
 
 export async function renderHome(root, nav) {
-  const [notes, collections, bookTitle, lastBackup] = await Promise.all([
+  const [notes, collections, bookTitle, lastBackup, motto, specialDate, specialLabel] = await Promise.all([
     db.allEntries(), db.allCollections(), db.getSetting('bookTitle', 'Little Memories'), db.getSetting('lastBackup'),
+    db.getSetting('motto', ''), db.getSetting('specialDate', ''), db.getSetting('specialLabel', ''),
   ]);
   const now = new Date();
+  const isTheDay = specialDate && specialDate.slice(5) === todayISO(now).slice(5);
+  const ridgeLabel = specialDate ? [fmt.dots(specialDate).slice(0, 5), specialLabel].filter(Boolean).join(' · ') : '';
   const recent = [...notes].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 4);
   const words = [...collections].sort(byOrder).slice(0, 6);
   const needsBackup = notes.length > 0 && (!lastBackup || Date.now() - lastBackup > 14 * 86400000);
@@ -146,8 +163,11 @@ export async function renderHome(root, nav) {
         h('button', { class: 'icon-btn', 'aria-label': 'Settings', onclick: () => nav.go('settings') }, icon('settings')),
       ),
     ),
-    h('p', { class: 'home-greeting' }, greeting(now)),
+    h('p', { class: 'home-greeting' }, isTheDay ? `Today is ${specialLabel || 'the day'}.` : greeting(now)),
     h('h1', { class: 'display home-title' }, bookTitle || 'Little Memories'),
+    motto ? h('p', { class: 'home-motto' }, motto) : null,
+    ridge(ridgeLabel),
+    !motto && !specialDate ? h('button', { class: 'make-yours', onclick: () => nav.go('settings') }, 'Make this notebook yours') : null,
 
     h('button', { class: 'new-note', onclick: () => nav.compose() },
       h('span', { class: 'new-note-text' }, 'New note'),
@@ -225,14 +245,18 @@ export async function renderNotes(root, nav) {
 //   sidebar (places + collections)  |  list of notes  |  the note you are writing
 
 export async function renderSidebar(el, nav, screenName, collectionId) {
-  const [notes, collections, bookTitle] = await Promise.all([db.allEntries(), db.allCollections(), db.getSetting('bookTitle', 'Little Memories')]);
+  const [notes, collections, bookTitle, motto] = await Promise.all([db.allEntries(), db.allCollections(), db.getSetting('bookTitle', 'Little Memories'), db.getSetting('motto', '')]);
   collections.sort(byOrder);
   const item = (label, route, names, count = null) => h('button', {
     class: 'side-item', 'aria-current': names.includes(screenName) ? 'page' : null, onclick: () => nav.tab(route),
   }, h('span', {}, label), count !== null ? h('span', { class: 'side-count' }, count) : null);
 
   fill(el,
-    h('div', { class: 'side-title' }, bookTitle || 'Little Memories'),
+    h('div', { class: 'side-label' },
+      h('div', { class: 'side-title' }, bookTitle || 'Little Memories'),
+      motto ? h('div', { class: 'side-motto' }, motto) : null,
+      h('span', { class: 'stripes' }),
+    ),
     h('button', { class: 'new-note side-new', onclick: () => nav.compose() }, h('span', { class: 'new-note-text' }, 'New note'), icon('compose')),
     h('nav', { class: 'side-nav', 'aria-label': 'Places' },
       item('Home', '', ['home']),
@@ -612,6 +636,7 @@ export async function renderSearch(root, nav) {
 // ================= SETTINGS =================
 
 export async function renderSettings(root, nav) {
+  const [motto, specialDate, specialLabel] = await Promise.all([db.getSetting('motto', ''), db.getSetting('specialDate', ''), db.getSetting('specialLabel', '')]);
   const [bookTitle, writingFont, lastBackup, notes, photoIds, canFaceId, hasFaceId] = await Promise.all([
     db.getSetting('bookTitle', 'Little Memories'),
     db.getSetting('writingFont', 'clean'),
@@ -632,7 +657,7 @@ export async function renderSettings(root, nav) {
     },
   },
   h('option', { value: 'clean', selected: writingFont === 'clean' }, 'Sans-serif'),
-  h('option', { value: 'book', selected: writingFont === 'book' }, 'Serif'));
+  h('option', { value: 'book', selected: writingFont === 'book' }, 'Handwriting'));
 
   const faceIdRow = h('label', { class: 'set-row' },
     h('span', {}, 'Unlock with Face ID'),
@@ -685,6 +710,12 @@ export async function renderSettings(root, nav) {
     },
   }, h('span', {}, 'Export backup'), icon('chevron'));
 
+  const textRow = (label, key, value, placeholder) => h('label', { class: 'set-row' }, h('span', {}, label),
+    h('input', {
+      class: 'set-input', type: 'text', value: value || '', placeholder, maxlength: 60,
+      onchange: async (e) => { await db.setSetting(key, e.target.value.trim()); toast('Saved'); window.dispatchEvent(new CustomEvent('notes-changed', { detail: {} })); },
+    }));
+  const dateText = h('span', { class: 'set-value' }, specialDate ? fmt.medium(specialDate) : 'Choose');
   const group = (title, ...rows) => h('section', { class: 'set-group' }, h('h2', { class: 'eyebrow' }, title), h('div', { class: 'set-list' }, rows));
   const info = (label, value) => h('div', { class: 'set-row static' }, h('span', {}, label), h('span', { class: 'set-value' }, value));
 
@@ -692,14 +723,18 @@ export async function renderSettings(root, nav) {
     bar(nav),
     screen(
       head({ title: 'Settings' }),
-      group('Your journal',
-        h('label', { class: 'set-row' }, h('span', {}, 'Title'),
+      group('Make it yours',
+        textRow('Title', 'bookTitle', bookTitle, 'Little Memories'),
+        textRow('A line under the title', 'motto', motto, 'Something only you understand'),
+        h('label', { class: 'set-row has-input' }, h('span', {}, 'A date that matters'), dateText,
           h('input', {
-            class: 'set-input', type: 'text', value: bookTitle || '', placeholder: 'Little Memories', maxlength: 40,
-            onchange: async (e) => { await db.setSetting('bookTitle', e.target.value.trim()); toast('Saved'); },
+            type: 'date', value: specialDate || '', 'aria-label': 'A date that matters',
+            oninput: async (e) => { await db.setSetting('specialDate', e.target.value); dateText.textContent = e.target.value ? fmt.medium(e.target.value) : 'Choose'; toast('Saved'); },
           })),
+        textRow('What that day is', 'specialLabel', specialLabel, 'e.g. where it began'),
         h('label', { class: 'set-row' }, h('span', {}, 'Writing font'), fontSelect),
       ),
+      h('p', { class: 'set-note' }, 'These words are saved only on this device. The line appears under the title, and the date is marked at the top of the mountain on the first page.'),
       group('Privacy',
         h('button', { class: 'set-row', onclick: async () => { if (await changePin()) toast('PIN changed'); } }, h('span', {}, 'Change PIN'), icon('chevron')),
         faceIdRow,

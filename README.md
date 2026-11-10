@@ -1,6 +1,10 @@
 # Little Memories
 
-The simplicity of Apple Notes with the feeling of opening a personal journal. Writing comes first; collections, dates and photographs give it meaning.
+The simplicity of Apple Notes with the feeling of opening your own school notebook. Writing comes first; collections, dates and photographs give it meaning.
+
+**The look comes from real things:** squared notebook paper with a red margin line, titles in blue pen handwriting, a dark brown hoodie, peach iced tea, a pink sock stripe, and a mountain ridge drawn across the first page. Photographs are taped in.
+
+**Make it yours** (in Settings): your own title, a line under the title, and a date that matters, which is marked at the top of the mountain. These words are saved only on your device, never in this code.
 
 **Your journal lives only on your phone.** This repository contains just the empty app (the code). None of your notes, photos or names are ever stored here or sent anywhere.
 
@@ -81,4 +85,6 @@ After you change something, bump the version in `sw.js` (e.g. `little-memories-v
 
 ## Fonts
 
-Newsreader (titles and quotes) and Hanken Grotesk (writing, reading and navigation), both under the SIL Open Font License (see `fonts/`).
+Reenie Beanie (handwritten titles), Kalam (small handwritten labels and captions) and Hanken Grotesk (the text you write and read), all under the SIL Open Font License (see `fonts/`).
+
+**Using your own handwriting:** write the alphabet on a template from a free tool such as calligraphr.com, export it as a font, convert it to `.woff2`, put it in `fonts/` and change the first `src` line in `css/fonts.css`.

@@ -1,20 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <defs>
-    <linearGradient id="cover" x1="0" y1="0" x2="0.4" y2="1">
-      <stop offset="0" stop-color="#76503a"/>
-      <stop offset="1" stop-color="#5c3d2b"/>
-    </linearGradient>
-  </defs>
-  <!-- walnut leather cover -->
-  <rect width="512" height="512" fill="url(#cover)"/>
-  <!-- spine -->
-  <rect x="0" y="0" width="64" height="512" fill="#2e211a" opacity="0.22"/>
-  <rect x="64" y="0" width="2" height="512" fill="#2e211a" opacity="0.25"/>
-  <!-- fine antique gold frame -->
-  <rect x="122" y="96" width="292" height="320" fill="none" stroke="#c6ab7b" stroke-width="2.5" opacity="0.9"/>
-  <!-- title label -->
-  <rect x="198" y="226" width="140" height="2.5" fill="#c6ab7b"/>
-  <rect x="226" y="246" width="84" height="2" fill="#c6ab7b" opacity="0.7"/>
-  <!-- ribbon -->
-  <path d="M366 0h22v92l-11-9-11 9z" fill="#a9784b"/>
+  <!-- a school notebook: hoodie-brown cover, a paper label, pen lines, sock stripes -->
+  <rect width="512" height="512" fill="#46301f"/>
+  <rect width="58" height="512" fill="#000" opacity="0.2"/>
+  <g transform="rotate(-2 256 230)">
+    <rect x="126" y="130" width="290" height="190" rx="4" fill="#fdfaf3"/>
+    <path d="M160 196c22-10 34 8 56-2s30-22 54-12 36 14 58 4 30-8 54-2" fill="none" stroke="#27448e" stroke-width="9" stroke-linecap="round"/>
+    <path d="M160 246c20-6 40 4 62-2s38-8 60-2" fill="none" stroke="#27448e" stroke-width="7" stroke-linecap="round" opacity="0.75"/>
+    <rect x="160" y="278" width="64" height="5" fill="#e79ab0"/><rect x="160" y="289" width="64" height="5" fill="#e79ab0"/><rect x="160" y="300" width="64" height="5" fill="#e79ab0"/>
+  </g>
+  <path d="M96 420c40-6 70-26 100-48 22-16 34-2 58-22 20-16 30-26 44-24 16 2 24 22 50 34 28 13 52 30 84 36" fill="none" stroke="#e0a659" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
