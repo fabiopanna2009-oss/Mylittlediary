@@ -40,6 +40,35 @@ export async function addPhotoFromFile(file) {
   return id;
 }
 
+// Save one of your own drawings (dark lines on white paper).
+// The white paper is removed so only the ink remains: every pixel keeps as much ink as it was dark.
+// That way the drawing sits directly on the notebook page, in the light and in the dark look.
+export async function addDrawingFromFile(file) {
+  const source = await createImageBitmap(file);
+  const scale = Math.min(1, 1100 / Math.max(source.width, source.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(source.width * scale));
+  canvas.height = Math.max(1, Math.round(source.height * scale));
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height); // transparent areas count as paper
+  ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+  if (source.close) source.close();
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const px = image.data;
+  for (let i = 0; i < px.length; i += 4) {
+    const light = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+    const ink = Math.max(0, Math.min(255, (255 - light - 14) * 1.35)); // a little contrast, so grey paper vanishes
+    px[i] = 42; px[i + 1] = 32; px[i + 2] = 26;                         // the notebook's ink colour
+    px[i + 3] = ink;
+  }
+  ctx.putImageData(image, 0, 0);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+  const id = uid();
+  await db.savePhoto({ id, blob, thumb: blob, type: 'image/png', createdAt: Date.now() });
+  return id;
+}
+
 // Object URLs let an <img> show a picture stored in the database.
 // We remember them so the same picture isn't loaded twice.
 const urlCache = new Map();
@@ -85,6 +114,7 @@ export async function cleanUpUnusedPhotos() {
     (n.blocks || []).forEach((b) => { if (b.type === 'photo') used.add(b.photoId); }); // notes from older versions
   });
   collections.forEach((c) => { if (c.coverPhotoId) used.add(c.coverPhotoId); });
+  (await db.getSetting('drawings', []) || []).forEach((id) => used.add(id)); // your own drawings (Settings)
   for (const id of photoIds) {
     if (!used.has(id)) {
       forgetPhotoURL(id);

@@ -6,7 +6,9 @@ The simplicity of Apple Notes with the feeling of opening your own school notebo
 
 **Make it yours** (in Settings): your own title, a line under the title, a date that matters (marked at the top of the mountain), and *words that matter*: nicknames, phrases, places. They are scribbled across the first page between small pen drawings and a spiral of your photographs, and the page writes itself in when you open the journal. All of this is saved only on your device, never in this code.
 
-**The opening.** After the PIN, your words, sentences, places and photographs pop up one after another all over the page, each at its own angle, together with lines from your notes. A different mix each time (tap to skip, replay or turn it off in Settings). The lock screen itself shows your words, drawings and the mountain, but never photographs, and the words can be hidden there with a switch.
+**The opening.** After the PIN, your words, sentences, places and photographs pop up one after another all over the page, each at its own angle, together with lines from your notes. A different mix each time, each piece at its own random spot (tap to skip, replay or turn it off in Settings).
+
+**Your drawings.** In Settings you can add your own pen sketches (dark lines on white paper). The app removes the paper and keeps only the ink, so they sit directly on the page in the opening and on the first page. The lock screen itself shows your words, drawings and the mountain, but never photographs, and the words can be hidden there with a switch.
 
 **Your journal lives only on your phone.** This repository contains just the empty app (the code). None of your notes, photos or names are ever stored here or sent anywhere.
 

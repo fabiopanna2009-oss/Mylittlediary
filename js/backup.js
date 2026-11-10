@@ -134,9 +134,9 @@ async function readZip(blob) {
 const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/heic': 'heic', 'image/webp': 'webp', 'image/gif': 'gif' };
 
 export async function createBackup() {
-  const [entries, collections, photos, bookTitle, noteSort, motto, specialDate, specialLabel, words] = await Promise.all([
+  const [entries, collections, photos, bookTitle, noteSort, motto, specialDate, specialLabel, words, drawings] = await Promise.all([
     db.allEntries(), db.allCollections(), db.allPhotos(),
-    db.getSetting('bookTitle'), db.getSetting('noteSort'), db.getSetting('motto'), db.getSetting('specialDate'), db.getSetting('specialLabel'), db.getSetting('words'),
+    db.getSetting('bookTitle'), db.getSetting('noteSort'), db.getSetting('motto'), db.getSetting('specialDate'), db.getSetting('specialLabel'), db.getSetting('words'), db.getSetting('drawings', []),
   ]);
 
   const photoFiles = photos.map((p) => ({
@@ -151,7 +151,7 @@ export async function createBackup() {
     app: 'little-memories',
     format: 2,
     exportedAt: new Date().toISOString(),
-    settings: { bookTitle, noteSort, motto, specialDate, specialLabel, words },
+    settings: { bookTitle, noteSort, motto, specialDate, specialLabel, words, drawings },
     collections,
     entries,
     photos: photoFiles.map(({ blob, ...info }) => info),
@@ -246,6 +246,11 @@ export async function importBackup(file) {
   for (const key of ['bookTitle', 'motto', 'specialDate', 'specialLabel']) {
     const value = diary.settings?.[key];
     if (value && !(await db.getSetting(key))) await db.setSetting(key, value);
+  }
+  // Your own drawings from the backup are added to the ones on this device.
+  if (Array.isArray(diary.settings?.drawings) && diary.settings.drawings.length) {
+    const mineDrawings = await db.getSetting('drawings', []) || [];
+    await db.setSetting('drawings', [...new Set([...mineDrawings, ...diary.settings.drawings])]);
   }
   // Words and sentences are added to the ones you already have (no duplicates).
   if (diary.settings?.words) {

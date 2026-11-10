@@ -14,13 +14,13 @@ import {
   pickFiles, pauseAutoLock, resumeAutoLock,
 } from './util.js';
 import { noteTitle, noteExcerpt, noteWhen } from './notes.js';
-import { photoImg, photoURL } from './photos.js';
+import { photoImg, photoURL, addDrawingFromFile, forgetPhotoURL } from './photos.js';
 import { ridge, wordScatter, doodle, DOODLES } from './drawings.js';
 import { getTheme, setTheme } from './theme.js';
 import { changePin, faceIdSupported, faceIdEnabled, enableFaceId, disableFaceId } from './lock.js';
 import { createBackup, shareBackup, importBackup } from './backup.js';
 
-export const APP_VERSION = '4.8.0';
+export const APP_VERSION = '4.10.0';
 
 // ================= shared pieces =================
 
@@ -182,6 +182,7 @@ export async function renderHome(root, nav, { intro = false } = {}) {
     db.allEntries(), db.allCollections(), db.getSetting('bookTitle', 'Little Memories'), db.getSetting('lastBackup'),
     db.getSetting('motto', ''), db.getSetting('specialDate', ''), db.getSetting('specialLabel', ''),
   ]);
+  const homeDrawings = (await db.getSetting('drawings', []) || []).slice(0, 4);
   const hasOwnWords = !!(await db.getSetting('words', '') || '').trim();
   const words = (await wordsThatMatter()).filter((w) => w.length <= 22).slice(0, 24); // sentences are kept for the opening
   const photos = [...notes].sort((a, b) => b.createdAt - a.createdAt)
@@ -223,6 +224,7 @@ export async function renderHome(root, nav, { intro = false } = {}) {
       textLink(hasOwnWords ? 'Edit' : 'Add yours', () => nav.go('settings')),
     ),
     wordScatter(words),
+    homeDrawings.length ? h('div', { class: 'drawing-row' }, homeDrawings.map((id) => photoImg(id, 'full', 'drawing'))) : null,
     h('div', { class: 'block-label', style: { marginTop: '26px' } },
       h('h2', { class: 'eyebrow' }, 'Photographs'),
       photos.length ? textLink('All', () => nav.tab('photos'), { arrow: true }) : null,
@@ -290,8 +292,10 @@ export async function playOpening({ force = false } = {}) {
   const places = [...new Set(notes.map((n) => n.place?.name?.trim()).filter(Boolean))];
   const photos = notes.flatMap((n) => (n.photos || []).map((p) => ({ ...p, note: n })));
 
+  const drawingIds = await db.getSetting('drawings', []) || [];
   const pick = (list, n) => shuffled(list).slice(0, n);
   const items = [
+    ...pick(drawingIds, big ? 4 : 2).map((id) => ({ kind: 'drawing', id })),
     ...pick(short, big ? 13 : 8).map((text) => ({ kind: 'word', text })),
     ...pick([...sentences, ...noteLines], big ? 6 : 4).map((text) => ({ kind: 'line', text })),
     ...pick(places, big ? 3 : 2).map((text) => ({ kind: 'place', text })),
@@ -301,43 +305,85 @@ export async function playOpening({ force = false } = {}) {
     ...pick(photos, big ? 6 : 4).map((photo) => ({ kind: 'photo', photo })),
   ];
   // a few drawings between them
-  const doodleNames = pick(Object.keys(DOODLES), Math.max(2, Math.round(items.length / 4)));
+  const doodleNames = pick(Object.keys(DOODLES), drawingIds.length ? 2 : Math.max(2, Math.round(items.length / 4)));
   doodleNames.forEach((name) => items.push({ kind: 'doodle', name }));
 
-  // ----- place them: shuffled across the page, popping up in a random order -----
-  const order = shuffled(items.map((_, i) => i));          // when each one appears
-  const step = Math.min(0.32, 5.2 / Math.max(items.length, 1));
+  // ----- build them (hidden for now; each gets its own random spot below) -----
   const colours = ['var(--pen)', 'var(--caramel)', 'var(--ink-2)', 'var(--pen)', 'var(--ink-3)'];
-
-  const cloud = h('div', { class: 'opening-cloud' }, shuffled(items).map((it, i) => {
-    const delay = `${0.7 + order[i] * step}s`;
-    const tilt = `${between(-13, 13).toFixed(1)}deg`;
-    const style = { '--tilt': tilt, animationDelay: delay, marginTop: `${between(0, 14).toFixed(0)}px`, color: colours[i % colours.length] };
+  const els = shuffled(items).map((it, i) => {
+    const tilt = between(-16, 16);
+    const style = { '--tilt': `${tilt.toFixed(1)}deg`, color: colours[i % colours.length] };
+    let el;
     if (it.kind === 'photo') {
-      return h('figure', { class: 'pop pop-photo', style },
+      el = h('figure', { class: 'pop pop-photo', style },
         photoImg(it.photo.photoId, 'thumb'),
         (it.photo.caption || it.photo.date) ? h('figcaption', {}, it.photo.caption || fmt.medium(it.photo.date)) : null);
+    } else if (it.kind === 'drawing') {
+      el = h('span', { class: 'pop pop-drawing', style: { '--tilt': `${between(-7, 7).toFixed(1)}deg` } }, photoImg(it.id, 'full', 'drawing'));
+    } else if (it.kind === 'doodle') {
+      el = doodle(it.name, i); el.classList.add('pop'); el.style.setProperty('--tilt', `${tilt.toFixed(1)}deg`);
+    } else if (it.kind === 'line') {
+      el = h('span', { class: 'pop pop-line', style: { ...style, '--tilt': `${between(-8, 8).toFixed(1)}deg` } }, `“${it.text}”`);
+    } else if (it.kind === 'place') {
+      el = h('span', { class: 'pop pop-place', style }, it.text);
+    } else {
+      const size = it.text.length <= 8 ? between(big ? 54 : 38, big ? 82 : 54) : between(big ? 36 : 26, big ? 54 : 36);
+      const penHand = i % 3 === 0; // some in the clearer pen hand (which runs larger, so it is scaled down)
+      el = h('span', { class: `pop pop-word ${penHand ? 'pen-hand' : ''}`, style: { ...style, fontSize: `${(size * (penHand ? 0.62 : 1)).toFixed(0)}px` } }, it.text);
     }
-    if (it.kind === 'doodle') { const d = doodle(it.name, i); d.classList.add('pop'); Object.assign(d.style, { animationDelay: delay }); d.style.setProperty('--tilt', tilt); return d; }
-    if (it.kind === 'line') return h('span', { class: 'pop pop-line', style: { ...style, '--tilt': `${between(-6, 6).toFixed(1)}deg` } }, `“${it.text}”`);
-    if (it.kind === 'place') return h('span', { class: 'pop pop-place', style }, it.text);
-    const size = it.text.length <= 8 ? between(big ? 54 : 40, big ? 78 : 56) : between(big ? 36 : 28, big ? 52 : 38);
-    const penHand = i % 3 === 0; // some in the clearer pen hand (which runs larger, so it is scaled down)
-    return h('span', { class: `pop pop-word ${penHand ? 'pen-hand' : ''}`, style: { ...style, fontSize: `${(size * (penHand ? 0.62 : 1)).toFixed(0)}px` } }, it.text);
-  }));
+    el.dataset.kind = it.kind;
+    return el;
+  });
 
-  const total = 0.7 + items.length * step + 2.8;
+  const cloud = h('div', { class: 'opening-cloud' }, els);
   const overlay = h('div', { class: 'opening', role: 'button', 'aria-label': 'Open the journal' },
     h('div', { class: 'opening-title' }, bookTitle || 'Little Memories'),
     cloud,
     h('span', { class: 'opening-hint', style: { animationDelay: '2.5s' } }, 'tap to open'),
   );
 
+  // Give every piece a random place on the page where it doesn't cover another one.
+  // For each piece we try many random spots and keep the one farthest from everything already placed,
+  // so the page fills evenly but never looks arranged.
+  function scatter() {
+    const W = cloud.clientWidth;
+    const H = cloud.clientHeight;
+    const placed = [];
+    const rank = { drawing: 0, photo: 0, line: 1, word: 2, place: 3, doodle: 4 }; // big things first, drawings fill the gaps
+    const queue = [...els].sort((x, y) => rank[x.dataset.kind] - rank[y.dataset.kind] || (y.offsetWidth * y.offsetHeight) - (x.offsetWidth * x.offsetHeight));
+    for (const el of queue) {
+      const w = el.offsetWidth;
+      const hgt = el.offsetHeight;
+      const rad = Math.abs(parseFloat(el.style.getPropertyValue('--tilt')) || 0) * Math.PI / 180;
+      const bw = w * Math.cos(rad) + hgt * Math.sin(rad); // the space it needs once tilted
+      const bh = w * Math.sin(rad) + hgt * Math.cos(rad);
+      let best = null;
+      if (bw < W - 8 && bh < H - 8) {
+        for (let attempt = 0; attempt < 70; attempt++) {
+          const cx = between(bw / 2 + 4, W - bw / 2 - 4);
+          const cy = between(bh / 2 + 4, H - bh / 2 - 4);
+          const gap = 8;
+          const hits = placed.some((p) => Math.abs(cx - p.cx) < (bw + p.bw) / 2 + gap && Math.abs(cy - p.cy) < (bh + p.bh) / 2 + gap);
+          if (hits) continue;
+          const room = placed.length ? Math.min(...placed.map((p) => Math.hypot(cx - p.cx, cy - p.cy))) : 1e9;
+          if (!best || room > best.room) best = { cx, cy, room };
+        }
+      }
+      if (!best) { el.remove(); continue; } // no free spot left on this screen
+      placed.push({ cx: best.cx, cy: best.cy, bw, bh });
+      el.style.left = `${best.cx - w / 2}px`;
+      el.style.top = `${best.cy - hgt / 2}px`;
+    }
+    return [...cloud.children];
+  }
+
   return new Promise((resolve) => {
     let done = false;
+    let timer = null;
     const finish = () => {
       if (done) return;
       done = true;
+      clearTimeout(timer);
       overlay.classList.add('leaving');
       setTimeout(() => overlay.remove(), 500);
       resolve(true);
@@ -346,20 +392,20 @@ export async function playOpening({ force = false } = {}) {
     document.addEventListener('keydown', function onKey() { document.removeEventListener('keydown', onKey); finish(); });
     // if the app goes to the background while this plays, end it
     document.addEventListener('visibilitychange', function onHide() { if (document.visibilityState === 'hidden') { document.removeEventListener('visibilitychange', onHide); finish(); } });
-    setTimeout(finish, total * 1000);
     document.body.append(overlay);
-    // If it doesn't all fit on this screen, take things away until it does (drawings first, then the rest).
-    const trim = () => {
-      let guard = 40;
-      while (cloud.scrollHeight > cloud.clientHeight + 2 && cloud.children.length > 5 && guard-- > 0) {
-        // photographs are kept the longest
-        (cloud.querySelector('.doodle') || cloud.querySelector('.pop-place') || cloud.querySelector('.pop-word.pen-hand')
-          || cloud.querySelector('.pop-line') || cloud.querySelector('.pop-word') || cloud.lastElementChild).remove();
-      }
-    };
-    trim();
-    document.fonts?.ready.then(trim);
-    cloud.querySelectorAll('img').forEach((img) => img.addEventListener('load', trim)); // photographs get their height when loaded
+
+    // Sizes are only known once the handwriting fonts and the photographs have loaded.
+    const loaded = [...cloud.querySelectorAll('img')].map((img) => new Promise((ok) => {
+      if (img.complete && img.naturalWidth) ok(); else { img.addEventListener('load', ok); img.addEventListener('error', ok); }
+    }));
+    const ready = Promise.race([Promise.all([document.fonts?.ready, ...loaded]), new Promise((ok) => setTimeout(ok, 1800))]);
+    ready.then(() => {
+      if (done) return;
+      const shown = shuffled(scatter());           // the order in which they pop up
+      const step = Math.min(0.3, 5 / Math.max(shown.length, 1));
+      shown.forEach((el, i) => { el.style.animationDelay = `${0.35 + i * step}s`; el.classList.add('go'); });
+      timer = setTimeout(finish, (0.35 + shown.length * step + 3) * 1000);
+    });
   });
 }
 
@@ -879,6 +925,36 @@ export async function renderSettings(root, nav) {
       onchange: async (e) => { await db.setSetting(key, e.target.value.trim()); toast('Saved'); window.dispatchEvent(new CustomEvent('notes-changed', { detail: {} })); },
     }));
   const dateText = h('span', { class: 'set-value' }, specialDate ? fmt.medium(specialDate) : 'Choose');
+  // ----- your own drawings -----
+  let drawings = await db.getSetting('drawings', []) || [];
+  const drawingGrid = h('div', { class: 'drawing-grid' });
+  const drawingInput = h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
+  const drawDrawings = () => fill(drawingGrid,
+    drawings.map((id) => h('button', {
+      class: 'drawing-tile', 'aria-label': 'Remove this drawing',
+      onclick: async () => {
+        if (!await ask({ title: 'Remove this drawing?', ok: 'Remove', danger: true })) return;
+        drawings = drawings.filter((x) => x !== id);
+        await db.setSetting('drawings', drawings);
+        forgetPhotoURL(id);
+        await db.deletePhoto(id);
+        drawDrawings();
+      },
+    }, photoImg(id, 'full', 'drawing'))),
+    h('button', { class: 'drawing-tile add', onclick: () => pickFiles(drawingInput) }, '+ Add'),
+  );
+  drawingInput.addEventListener('change', async () => {
+    const files = [...drawingInput.files];
+    drawingInput.value = '';
+    for (const file of files) {
+      try { drawings = [...drawings, await addDrawingFromFile(file)]; } catch { toast('One drawing couldn’t be added'); }
+    }
+    await db.setSetting('drawings', drawings);
+    drawDrawings();
+    if (files.length) toast('Added');
+  });
+  drawDrawings();
+
   const group = (title, ...rows) => h('section', { class: 'set-group' }, h('h2', { class: 'eyebrow' }, title), h('div', { class: 'set-list' }, rows));
   const info = (label, value) => h('div', { class: 'set-row static' }, h('span', {}, label), h('span', { class: 'set-value' }, value));
 
@@ -916,6 +992,12 @@ export async function renderSettings(root, nav) {
           onchange: async (e) => { await db.setSetting('words', e.target.value); toast('Saved'); },
         }),
       ),
+      h('section', { class: 'set-group' },
+        h('h2', { class: 'eyebrow' }, 'Your drawings'),
+        drawingGrid,
+        drawingInput,
+      ),
+      h('p', { class: 'set-note' }, 'Pen sketches of moments: holding hands, a dance, falling asleep on a shoulder. Draw them yourself or have them drawn, as dark lines on a white background. They appear in the opening and on the first page, and stay only on this device.'),
       h('p', { class: 'set-note' }, 'One per line: single words, or whole sentences. After the PIN, the journal opens with them popping up across the page, together with your places, photographs and lines from your notes, different each time (tap to skip). Your words are also scribbled across the first page, between small drawings and a spiral of your photographs. Everything here is saved only on this device: the line appears under the title, and the date is marked at the top of the mountain.'),
       group('Privacy',
         h('button', { class: 'set-row', onclick: async () => { if (await changePin()) toast('PIN changed'); } }, h('span', {}, 'Change PIN'), icon('chevron')),
