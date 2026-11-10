@@ -4,7 +4,7 @@
 // How updates work: the app opens instantly from the saved copy, and in the background
 // it checks GitHub for a newer version. The next time you open the app, you get the new one.
 
-const CACHE = 'little-memories-v22';
+const CACHE = 'little-memories-v23';
 
 const APP_FILES = [
   './',
@@ -38,7 +38,7 @@ const APP_FILES = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(APP_FILES)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(APP_FILES.map((url) => new Request(url, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (event) => {
@@ -57,7 +57,8 @@ self.addEventListener('fetch', (event) => {
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
     const cached = await cache.match(request, { ignoreSearch: true });
-    const fresh = fetch(request)
+    // 'no-cache' asks the server every time, so a new version is never hidden by the browser's own cache
+    const fresh = fetch(request, { cache: 'no-cache' })
       .then((response) => {
         if (response.ok) cache.put(request, response.clone());
         return response;
