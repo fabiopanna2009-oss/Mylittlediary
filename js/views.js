@@ -18,7 +18,7 @@ import { photoImg, photoURL } from './photos.js';
 import { changePin, faceIdSupported, faceIdEnabled, enableFaceId, disableFaceId } from './lock.js';
 import { createBackup, shareBackup, importBackup } from './backup.js';
 
-export const APP_VERSION = '3.0.0';
+export const APP_VERSION = '3.1.0';
 
 // ================= shared pieces =================
 
@@ -56,12 +56,15 @@ function shortDate(ms) {
   return d.slice(0, 4) === today.slice(0, 4) ? fmt.medium(d).replace(/ \d{4}$/, '') : fmt.medium(d);
 }
 
+// On a computer the note list stays visible next to the editor; this is the note that is open.
+let activeNoteId = null;
+
 // One note in a list: title, then date and the first words; a small photo if it has one.
 function noteRow(n, nav, dateKey = 'updatedAt') {
   const excerpt = noteExcerpt(n);
   const photo = (n.photos || [])[0];
   return h('li', {},
-    h('button', { class: 'note-row', onclick: () => nav.open(n.id) },
+    h('button', { class: 'note-row', 'aria-current': n.id === activeNoteId ? 'true' : null, onclick: () => nav.open(n.id) },
       h('span', { class: 'note-row-body' },
         h('span', { class: 'note-row-title' }, n.pinned ? icon('pin', 'row-pin') : null, noteTitle(n)),
         h('span', { class: 'note-row-sub' },
@@ -214,6 +217,95 @@ export async function renderNotes(root, nav) {
     head({ title: 'Notes', tab: true, lede: notes.length ? plural(notes.length, 'note', 'notes') : null }),
     notes.length > 1 ? h('div', { class: 'list-tools' }, sortBtn) : null,
     list,
+  ));
+}
+
+// ================= COMPUTER LAYOUT: sidebar and note list =================
+// On a wide screen the journal has three panes, like Apple Notes on a Mac:
+//   sidebar (places + collections)  |  list of notes  |  the note you are writing
+
+export async function renderSidebar(el, nav, screenName, collectionId) {
+  const [notes, collections, bookTitle] = await Promise.all([db.allEntries(), db.allCollections(), db.getSetting('bookTitle', 'Little Memories')]);
+  collections.sort(byOrder);
+  const item = (label, route, names, count = null) => h('button', {
+    class: 'side-item', 'aria-current': names.includes(screenName) ? 'page' : null, onclick: () => nav.tab(route),
+  }, h('span', {}, label), count !== null ? h('span', { class: 'side-count' }, count) : null);
+
+  fill(el,
+    h('div', { class: 'side-title' }, bookTitle || 'Little Memories'),
+    h('button', { class: 'new-note side-new', onclick: () => nav.compose() }, h('span', { class: 'new-note-text' }, 'New note'), icon('compose')),
+    h('nav', { class: 'side-nav', 'aria-label': 'Places' },
+      item('Home', '', ['home']),
+      item('Notes', 'notes', ['notes', 'editor'], notes.length),
+      item('Photographs', 'photos', ['photos']),
+      item('Search', 'search', ['search']),
+    ),
+    h('div', { class: 'side-head' },
+      h('button', { class: 'eyebrow side-head-link', onclick: () => nav.tab('memories') }, 'Memories'),
+      h('button', { class: 'side-add', 'aria-label': 'New collection', onclick: async () => { const c = await createCollection(); if (c) nav.tab(`collection/${c.id}`); } }, '+'),
+    ),
+    h('nav', { class: 'side-words', 'aria-label': 'Collections' }, collections.map((c) => h('button', {
+      class: 'side-word', 'aria-current': screenName === 'collection' && collectionId === c.id ? 'page' : null,
+      onclick: () => nav.tab(`collection/${c.id}`),
+    }, h('span', {}, c.name), h('span', { class: 'side-count' }, notes.filter((n) => (n.collections || []).includes(c.id)).length || '')))),
+    h('div', { class: 'side-foot' },
+      h('button', { class: 'side-item quiet', 'aria-current': screenName === 'settings' ? 'page' : null, onclick: () => nav.tab('settings') }, 'Settings & backup'),
+      h('button', { class: 'side-item quiet', onclick: () => nav.lock() }, 'Lock'),
+    ),
+  );
+}
+
+let listFilter = '';
+
+export async function renderListPane(el, nav, noteId) {
+  activeNoteId = noteId;
+  const notes = await db.allEntries();
+  let sort = await db.getSetting('noteSort', 'updatedAt');
+  const keepScroll = el.querySelector('.list-scroll')?.scrollTop || 0;
+  const list = h('div', { class: 'list-scroll' });
+  const sortBtn = h('button', { class: 'link quiet sort' });
+  const filter = h('input', { class: 'list-filter', type: 'search', placeholder: 'Filter notes', value: listFilter, 'aria-label': 'Filter notes', autocomplete: 'off' });
+
+  function draw() {
+    sortBtn.textContent = sort === 'updatedAt' ? 'Last edited' : 'Date created';
+    const words = listFilter.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    const shown = words.length ? notes.filter((n) => words.every((w) => `${n.title}\n${n.text}`.toLowerCase().includes(w))) : notes;
+    const pinned = shown.filter((n) => n.pinned).sort((a, b) => b[sort] - a[sort]);
+    fill(list,
+      pinned.length ? h('section', { class: 'month' },
+        h('div', { class: 'month-head' }, h('h2', { class: 'month-name' }, 'Pinned')),
+        noteList(pinned, nav, sort),
+      ) : null,
+      monthGroups(shown.filter((n) => !n.pinned), nav, sort),
+      shown.length ? null : h('p', { class: 'empty-note' }, notes.length ? 'No notes match.' : 'No notes yet.'),
+    );
+  }
+  filter.addEventListener('input', () => { listFilter = filter.value; draw(); });
+  sortBtn.addEventListener('click', async () => {
+    sort = sort === 'updatedAt' ? 'createdAt' : 'updatedAt';
+    await db.setSetting('noteSort', sort);
+    draw();
+  });
+  draw();
+
+  const hadFocus = document.activeElement?.classList?.contains('list-filter');
+  fill(el,
+    h('div', { class: 'list-top' },
+      h('div', { class: 'list-top-row' }, h('h2', { class: 'title-2' }, 'Notes'), sortBtn),
+      filter,
+    ),
+    list,
+  );
+  list.scrollTop = keepScroll;
+  if (hadFocus) { filter.focus(); filter.setSelectionRange(filter.value.length, filter.value.length); }
+}
+
+// The main pane on a computer when no note is open.
+export function renderNotesPlaceholder(root, nav) {
+  activeNoteId = null;
+  fill(root, h('main', { class: 'screen enter pane-empty' },
+    h('p', { class: 'empty-note' }, 'Choose a note on the left, or begin a new one.'),
+    textLink('New note', () => nav.compose(), { arrow: true }),
   ));
 }
 

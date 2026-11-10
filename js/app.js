@@ -19,11 +19,16 @@ import { initLock, lockNow, isLocked } from './lock.js';
 import { renderEditor, closeEditor, saveCurrent } from './editor.js';
 import {
   renderHome, renderNotes, renderMemories, renderPhotos, renderCollection, renderSearch, renderSettings, openNotePhoto,
+  renderSidebar, renderListPane, renderNotesPlaceholder,
 } from './views.js';
 import { cleanUpUnusedPhotos } from './photos.js';
 
 const root = document.getElementById('app');
 const tabbar = document.getElementById('tabbar');
+const sidebar = document.getElementById('sidebar');
+const listPane = document.getElementById('listpane');
+// A wide screen (computer, iPad in landscape) gets three panes: sidebar | note list | note.
+const wide = window.matchMedia('(min-width: 900px)');
 const TAB_OF = { home: '', notes: 'notes', memories: 'memories', photos: 'memories', search: 'search' };
 
 let depth = 0;               // how many screens deep we are (for the back button)
@@ -93,6 +98,13 @@ async function drawRoute() {
     else t.removeAttribute('aria-current');
   });
 
+  const showList = wide.matches && (name === 'notes' || isEditor);
+  document.body.dataset.list = showList ? 'on' : 'off';
+  if (wide.matches) {
+    renderSidebar(sidebar, nav, document.body.dataset.screen, id);
+    if (showList) renderListPane(listPane, nav, name === 'note' ? id : null);
+  }
+
   await draw(name, id, params);
   window.scrollTo(0, isEditor ? 0 : (scrollMemory.get(lastDrawn.split('?')[0]) || 0));
 }
@@ -100,7 +112,7 @@ async function drawRoute() {
 function draw(name, id, params) {
   switch (name) {
     case 'home': return renderHome(root, nav);
-    case 'notes': return renderNotes(root, nav);
+    case 'notes': return wide.matches ? renderNotesPlaceholder(root, nav) : renderNotes(root, nav);
     case 'memories': return renderMemories(root, nav);
     case 'photos': return renderPhotos(root, nav);
     case 'search': return renderSearch(root, nav);
@@ -133,6 +145,22 @@ tabbar.addEventListener('click', (e) => {
   }
   scrollMemory.delete(`#/${tab.dataset.tab}`);
   nav.tab(tab.dataset.tab);
+});
+
+// ---------- computer layout: keep the panes up to date, keyboard shortcuts ----------
+window.addEventListener('notes-changed', (e) => {
+  if (!wide.matches || isLocked()) return;
+  renderSidebar(sidebar, nav, document.body.dataset.screen, parseHash().parts[1]);
+  if (document.body.dataset.list === 'on') renderListPane(listPane, nav, e.detail?.id ?? null);
+});
+wide.addEventListener('change', () => route());
+
+document.addEventListener('keydown', (e) => {
+  if (isLocked() || document.querySelector('.dialog-overlay, .sheet-overlay, .lightbox')) return;
+  const mod = e.ctrlKey || e.metaKey;
+  if (e.altKey && !mod && e.key.toLowerCase() === 'n') { e.preventDefault(); nav.compose(); }        // Alt+N  new note
+  else if (mod && e.key.toLowerCase() === 'k') { e.preventDefault(); nav.tab('search'); setTimeout(() => document.querySelector('.search-field')?.focus(), 150); } // Ctrl+K search
+  else if (mod && e.shiftKey && e.key.toLowerCase() === 'l') { e.preventDefault(); nav.lock(); }       // Ctrl+Shift+L lock
 });
 
 // ---------- first start, and upgrades from older versions ----------

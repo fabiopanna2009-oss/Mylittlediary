@@ -36,16 +36,20 @@ export async function saveCurrent() {
   if (!dirty) return;
   Object.assign(current, derive(bodyEl), { title: titleEl.value.replace(/\n/g, ' ').trim() });
   if (isNoteEmpty(current)) {
-    if (current._saved) { await db.deleteEntry(current.id); current._saved = false; }
+    if (current._saved) { await db.deleteEntry(current.id); current._saved = false; window.dispatchEvent(new CustomEvent('notes-changed', { detail: { id: null } })); }
     setStatus('');
     return;
   }
   current.updatedAt = Date.now();
   const { _saved, ...note } = current;
   await db.saveEntry(note);
+  if (!current._saved && location.hash.startsWith('#/new')) {
+    history.replaceState(null, '', `#/note/${current.id}`); // the new note now has its own address
+  }
   current._saved = true;
   dirty = false;
   setStatus('Saved');
+  window.dispatchEvent(new CustomEvent('notes-changed', { detail: { id: current.id } }));
 }
 
 export async function closeEditor() {
