@@ -95,9 +95,11 @@ The app has to be online once (over HTTPS) so your iPhone can install it. After 
 2. Go to **Settings** → **Pages**.
 3. Under **Build and deployment**, set **Source** to **Deploy from a branch**.
 4. Choose the branch with the app (e.g. `main`, or `claude/focused-meitner-9r8kb0`) and the folder **`/ (root)`**, then click **Save**.
-5. After a minute, GitHub shows your link, e.g. `https://<your-username>.github.io/mydiary/`.
+5. After a minute, GitHub shows your link, e.g. `https://<your-username>.github.io/<repository-name>/`.
 
 **Option B: keep the repository private.** Use a free host that can read private repositories, such as Cloudflare Pages or Netlify. Connect your GitHub, pick this repository, leave the build command empty and set the output folder to `/`.
+
+> **The address contains the repository's name.** If you rename the repository, the address changes and an installed app can no longer update (it keeps running its saved copy). After a rename, open the new address and install the app again; on an iPhone, export a backup from the old app first and restore it in the new one.
 
 ### Step 2: Install it
 
