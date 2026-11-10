@@ -204,7 +204,13 @@ function unlock() {
 let lockPageShown = false;
 async function drawLockPage() {
   const showWords = await db.getSetting('lockWords', true);
-  const words = showWords === false ? [] : (await db.getSetting('words', '') || '').split('\n').map((w) => w.trim()).filter(Boolean).slice(0, window.innerWidth >= 900 ? 14 : 7); // fewer on a phone, so nothing is cut off
+  let words = [];
+  if (showWords !== false) {
+    words = (await db.getSetting('words', '') || '').split('\n').map((w) => w.trim()).filter(Boolean);
+    // until you have typed your own words, the names of your collections stand in
+    if (!words.length) words = (await db.allCollections()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map((c) => c.name);
+    words = words.slice(0, window.innerWidth >= 900 ? 14 : 7); // fewer on a phone, so nothing is cut off
+  }
   const deco = $('lock-deco');
   deco.replaceChildren(wordScatter(words));
   $('lock-ridge').replaceChildren(ridge(''));

@@ -20,7 +20,7 @@ import { getTheme, setTheme } from './theme.js';
 import { changePin, faceIdSupported, faceIdEnabled, enableFaceId, disableFaceId } from './lock.js';
 import { createBackup, shareBackup, importBackup } from './backup.js';
 
-export const APP_VERSION = '4.6.0';
+export const APP_VERSION = '4.7.0';
 
 // ================= shared pieces =================
 
@@ -182,7 +182,8 @@ export async function renderHome(root, nav, { intro = false } = {}) {
     db.allEntries(), db.allCollections(), db.getSetting('bookTitle', 'Little Memories'), db.getSetting('lastBackup'),
     db.getSetting('motto', ''), db.getSetting('specialDate', ''), db.getSetting('specialLabel', ''),
   ]);
-  const words = (await db.getSetting('words', '') || '').split('\n').map((w) => w.trim()).filter(Boolean).slice(0, 24);
+  const hasOwnWords = !!(await db.getSetting('words', '') || '').trim();
+  const words = (await wordsThatMatter()).slice(0, 24);
   const photos = [...notes].sort((a, b) => b.createdAt - a.createdAt)
     .flatMap((n) => (n.photos || []).map((p) => ({ ...p, note: n, when: p.date || iso(n.createdAt) })));
   const now = new Date();
@@ -219,7 +220,7 @@ export async function renderHome(root, nav, { intro = false } = {}) {
   const collage = h('div', { class: 'home-collage' },
     h('div', { class: 'block-label' },
       h('h2', { class: 'eyebrow' }, 'Words that matter'),
-      textLink(words.length ? 'Edit' : 'Add yours', () => nav.go('settings')),
+      textLink(hasOwnWords ? 'Edit' : 'Add yours', () => nav.go('settings')),
     ),
     wordScatter(words),
     h('div', { class: 'block-label', style: { marginTop: '26px' } },
@@ -269,14 +270,19 @@ function shuffled(list) {
   return a;
 }
 
-export async function playOpening() {
-  if (await db.getSetting('opening', true) === false) return false;
-  const [notes, bookTitle, wordsText] = await Promise.all([db.allEntries(), db.getSetting('bookTitle', 'Little Memories'), db.getSetting('words', '')]);
-  const words = (wordsText || '').split('\n').map((w) => w.trim()).filter(Boolean);
+// Your own words; until you have typed some, the names of your collections stand in for them.
+async function wordsThatMatter() {
+  const typed = (await db.getSetting('words', '') || '').split('\n').map((w) => w.trim()).filter(Boolean);
+  if (typed.length) return typed;
+  return (await db.allCollections()).sort(byOrder).map((c) => c.name);
+}
+
+export async function playOpening({ force = false } = {}) {
+  if (!force && await db.getSetting('opening', true) === false) return false;
+  const [notes, bookTitle, words, motto] = await Promise.all([db.allEntries(), db.getSetting('bookTitle', 'Little Memories'), wordsThatMatter(), db.getSetting('motto', '')]);
   const photos = shuffled(notes.flatMap((n) => (n.photos || []).map((p) => ({ ...p, note: n })))).slice(0, PILE.length);
   const lines = notes.map((n) => ({ n, line: (n.text || '').split('\n').find((l) => l.trim().length > 12 && l.trim().length < 150) })).filter((x) => x.line);
   const quote = lines.length ? lines[Math.floor(Math.random() * lines.length)] : null;
-  if (!words.length && !photos.length && !quote) return false; // nothing to show yet
 
   const wordsDone = 0.5 + Math.min(words.length, 12) * 0.14;          // seconds until the words are written
   const photosDone = wordsDone + 0.3 + photos.length * 0.55;          // …until the last photograph has landed
@@ -291,7 +297,9 @@ export async function playOpening() {
 
   const overlay = h('div', { class: 'opening', role: 'button', 'aria-label': 'Open the journal' },
     h('div', { class: 'opening-title' }, bookTitle || 'Little Memories'),
-    words.length ? wordScatter(shuffled(words).slice(0, 12)) : null,
+    motto ? h('div', { class: 'opening-motto' }, motto) : null,
+    h('div', { class: 'opening-ridge' }, ridge('')),
+    wordScatter(shuffled(words).slice(0, 12)),
     photos.length ? pile : null,
     quote ? h('p', { class: 'opening-quote', style: { animationDelay: `${photosDone + 0.2}s` } },
       `“${quote.line.trim()}”`,
@@ -861,6 +869,7 @@ export async function renderSettings(root, nav) {
           h('span', {}, 'Play memories when opening'),
           h('input', { type: 'checkbox', class: 'switch', checked: openingOn !== false, onchange: async (e) => { await db.setSetting('opening', e.target.checked); toast('Saved'); } }),
         ),
+        h('button', { class: 'set-row', onclick: () => playOpening({ force: true }) }, h('span', {}, 'Play the opening now'), icon('chevron')),
       ),
       h('section', { class: 'set-group' },
         h('h2', { class: 'eyebrow' }, 'Words that matter'),
