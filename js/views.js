@@ -15,13 +15,13 @@ import {
 } from './util.js';
 import { noteTitle, noteExcerpt, noteWhen } from './notes.js';
 import { photoImg, photoURL, addDrawingFromFile, forgetPhotoURL } from './photos.js';
-import { ridge, wordScatter, doodle, DOODLES } from './drawings.js';
+import { ridge, wordScatter, doodle, DOODLES, placeRandomly } from './drawings.js';
 import { getTheme, setTheme } from './theme.js';
 import { CHATGPT_INSTRUCTIONS, parseImport, applyImport } from './importer.js';
 import { changePin, faceIdSupported, faceIdEnabled, enableFaceId, disableFaceId } from './lock.js';
 import { createBackup, shareBackup, importBackup } from './backup.js';
 
-export const APP_VERSION = '4.11.0';
+export const APP_VERSION = '4.12.0';
 
 // ================= shared pieces =================
 
@@ -343,41 +343,6 @@ export async function playOpening({ force = false } = {}) {
     h('span', { class: 'opening-hint', style: { animationDelay: '2.5s' } }, 'tap to open'),
   );
 
-  // Give every piece a random place on the page where it doesn't cover another one.
-  // For each piece we try many random spots and keep the one farthest from everything already placed,
-  // so the page fills evenly but never looks arranged.
-  function scatter() {
-    const W = cloud.clientWidth;
-    const H = cloud.clientHeight;
-    const placed = [];
-    const rank = { drawing: 0, photo: 0, line: 1, word: 2, place: 3, doodle: 4 }; // big things first, drawings fill the gaps
-    const queue = [...els].sort((x, y) => rank[x.dataset.kind] - rank[y.dataset.kind] || (y.offsetWidth * y.offsetHeight) - (x.offsetWidth * x.offsetHeight));
-    for (const el of queue) {
-      const w = el.offsetWidth;
-      const hgt = el.offsetHeight;
-      const rad = Math.abs(parseFloat(el.style.getPropertyValue('--tilt')) || 0) * Math.PI / 180;
-      const bw = w * Math.cos(rad) + hgt * Math.sin(rad); // the space it needs once tilted
-      const bh = w * Math.sin(rad) + hgt * Math.cos(rad);
-      let best = null;
-      if (bw < W - 8 && bh < H - 8) {
-        for (let attempt = 0; attempt < 70; attempt++) {
-          const cx = between(bw / 2 + 4, W - bw / 2 - 4);
-          const cy = between(bh / 2 + 4, H - bh / 2 - 4);
-          const gap = 8;
-          const hits = placed.some((p) => Math.abs(cx - p.cx) < (bw + p.bw) / 2 + gap && Math.abs(cy - p.cy) < (bh + p.bh) / 2 + gap);
-          if (hits) continue;
-          const room = placed.length ? Math.min(...placed.map((p) => Math.hypot(cx - p.cx, cy - p.cy))) : 1e9;
-          if (!best || room > best.room) best = { cx, cy, room };
-        }
-      }
-      if (!best) { el.remove(); continue; } // no free spot left on this screen
-      placed.push({ cx: best.cx, cy: best.cy, bw, bh });
-      el.style.left = `${best.cx - w / 2}px`;
-      el.style.top = `${best.cy - hgt / 2}px`;
-    }
-    return [...cloud.children];
-  }
-
   return new Promise((resolve) => {
     let done = false;
     let timer = null;
@@ -402,7 +367,7 @@ export async function playOpening({ force = false } = {}) {
     const ready = Promise.race([Promise.all([document.fonts?.ready, ...loaded]), new Promise((ok) => setTimeout(ok, 1800))]);
     ready.then(() => {
       if (done) return;
-      const shown = shuffled(scatter());           // the order in which they pop up
+      const shown = shuffled(placeRandomly(cloud, els)); // each gets a random free spot; then they pop up in a random order
       const step = Math.min(0.3, 5 / Math.max(shown.length, 1));
       shown.forEach((el, i) => { el.style.animationDelay = `${0.35 + i * step}s`; el.classList.add('go'); });
       timer = setTimeout(finish, (0.35 + shown.length * step + 3) * 1000);

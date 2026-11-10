@@ -967,27 +967,23 @@ a.note-meta-item:active { opacity: 0.6; }
 @keyframes placeIn { from { opacity: 0; transform: translate(-50%, -50%) rotate(var(--tilt, 0deg)) scale(0.6); } }
 @keyframes fadeIn { from { opacity: 0; } }
 
-/* the lock screen is a notebook page too: words and drawings above, the mountain along the bottom */
+/* the lock screen is a notebook page too: words and drawings scattered around the PIN pad,
+   the mountain along the whole bottom edge */
 .lock { overflow: hidden; }
-.lock-inner { position: relative; z-index: 1; }
-.lock-deco { width: 100%; max-width: 420px; margin-bottom: 14px; flex: 0 0 auto; }
-.lock-deco .scatter { gap: 0 14px; }
-.lock-ridge { position: absolute; left: 0; right: 0; bottom: calc(var(--safe-bottom) - 6px); opacity: 0.4; pointer-events: none; }
-.lock-ridge .ridge { margin: 0; }
-.lock.intro .scribble { animation: writeIn 0.55s var(--ease) both; animation-delay: calc(0.2s + var(--i) * 0.09s); }
-.lock.intro .doodle path { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 0.8s ease-out forwards; animation-delay: calc(0.25s + var(--i) * 0.09s); }
-.lock.intro .ridge path:not(.trail):not(.flag) { stroke-dasharray: 700; stroke-dashoffset: 700; animation: drawLong 1.6s ease-out 0.1s forwards; }
-.lock.intro .ridge .trail, .lock.intro .ridge .flag { animation: fadeIn 0.6s ease-out 1.3s both; }
-@media (max-height: 700px) { .lock-deco { display: none; } .lock-book { font-size: 44px; } }
-
+.lock-inner { position: relative; z-index: 2; }
+.lock-deco { position: absolute; inset: calc(var(--safe-top) + 8px) 8px calc(var(--safe-bottom) + 8px); z-index: 1; pointer-events: none; }
+.lock-deco .pop.shown { opacity: 0.9; }
+.lock-deco .pop.go { animation: popIn 0.55s cubic-bezier(0.2, 1.3, 0.4, 1) both; }
+.lock-deco .doodle.pop { width: 40px; height: 40px; }
+.lock-ridge { position: absolute; left: 0; right: 0; bottom: 0; z-index: 0; opacity: 0.38; pointer-events: none; }
+.lock-ridge .ridge { margin: 0; max-width: none !important; width: 100%; }
+.lock-ridge .ridge svg { width: 100%; height: 20vh; }
+.lock-ridge .ridge path { vector-effect: non-scaling-stroke; }
+.lock-ridge .ridge .flag, .lock-ridge .ridge .trail { display: none; }
+.lock.intro .ridge path:not(.trail):not(.flag) { stroke-dasharray: 3000; stroke-dashoffset: 3000; animation: drawLong 2.2s ease-out 0.1s forwards; }
 @media (min-width: 900px) {
-  /* on a computer: the scribbled page on the left, the PIN on the right */
-  .lock { flex-direction: row; gap: 9vw; }
-  .lock-deco { max-width: 520px; margin: 0; }
-  .lock-deco .scatter { gap: 10px 26px; }
-  .lock-inner { margin: 0; }
-  .lock-ridge { opacity: 0.5; }
-  .lock-ridge .ridge svg { max-height: 30vh; }
+  .lock-deco .doodle.pop { width: 56px; height: 56px; }
+  .lock-ridge .ridge svg { height: 26vh; }
 }
 
 /* the opening: plays once after the PIN */
@@ -1099,14 +1095,6 @@ img.drawing { opacity: 0.92; }
 .doodle, .doodle:nth-of-type(4n) { width: 30px; height: 30px; }
 .home-collage { margin-top: 30px; }
 .spiral { max-width: 360px; margin-top: 16px; }
-.lock-deco .scatter, .opening .scatter { justify-content: center; }
-
-@media (min-width: 900px) {
-  .lock-deco .scribble, .lock-deco .scribble.s1, .lock-deco .scribble.s2, .lock-deco .scribble.s3,
-  .opening .scribble, .opening .scribble.s1, .opening .scribble.s2, .opening .scribble.s3 { font-size: 26px; }
-  .lock-deco .scribble.big, .opening .scribble.big { font-size: 46px; }
-  .lock-deco .doodle, .opening .doodle { width: 38px; height: 38px; }
-}
 
 /* import from ChatGPT */
 .import-steps { margin: 4px 0 14px; padding-left: 20px; font-size: 14.5px; line-height: 1.6; color: var(--ink-2); }

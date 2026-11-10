@@ -7,7 +7,7 @@
 // iOS shows the Face ID prompt for us. If it ever doesn't work, the PIN always works.
 
 import { db } from './db.js';
-import { ridge, wordScatter } from './drawings.js';
+import { ridge, doodle, DOODLES, scribbleWord, placeRandomly } from './drawings.js';
 
 const PIN_LENGTH = 4;
 const MAX_TRIES = 5;
@@ -199,24 +199,46 @@ function unlock() {
   onUnlockCallback();
 }
 
-// The lock screen is a page of the notebook too: your words (if you allow it), drawings and the mountain.
-// Photographs are never shown here, because this screen is visible before the PIN is entered.
+// The lock screen is a page of the notebook too: your words (if you allow it) and small drawings
+// are scattered at random spots and angles around the PIN pad, with the mountain along the bottom.
+// Photographs and your own drawings are never shown here, because this screen is visible before the PIN.
 let lockPageShown = false;
 async function drawLockPage() {
+  const wide = window.innerWidth >= 900;
   const showWords = await db.getSetting('lockWords', true);
   let words = [];
   if (showWords !== false) {
     words = (await db.getSetting('words', '') || '').split('\n').map((w) => w.trim()).filter(Boolean);
     // until you have typed your own words, the names of your collections stand in
     if (!words.length) words = (await db.allCollections()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map((c) => c.name);
-    words = words.filter((w) => w.length <= 22).slice(0, window.innerWidth >= 900 ? 14 : 7); // fewer on a phone, so nothing is cut off
+    words = words.filter((w) => w.length <= 22).sort(() => Math.random() - 0.5).slice(0, wide ? 18 : 9);
   }
+  const names = Object.keys(DOODLES).sort(() => Math.random() - 0.5).slice(0, wide ? 7 : 4);
+  const pieces = [
+    ...words.map((w, i) => scribbleWord(w, i, wide)),
+    ...names.map((n, i) => { const d = doodle(n, i); d.classList.add('pop'); d.dataset.kind = 'doodle'; d.style.setProperty('--tilt', `${(Math.random() * 30 - 15).toFixed(1)}deg`); return d; }),
+  ];
   const deco = $('lock-deco');
-  deco.replaceChildren(wordScatter(words));
-  $('lock-ridge').replaceChildren(ridge(''));
-  // the page writes itself in the first time it is shown
-  $('lock').classList.toggle('intro', !lockPageShown);
+  deco.replaceChildren(...pieces);
+
+  const hill = ridge('');
+  hill.querySelector('svg').setAttribute('preserveAspectRatio', 'none'); // stretch along the whole bottom edge
+  $('lock-ridge').replaceChildren(hill);
+
+  // place them once the handwriting fonts are ready (sizes are only known then)
+  const first = !lockPageShown;
   lockPageShown = true;
+  await Promise.race([document.fonts?.ready, new Promise((ok) => setTimeout(ok, 1500))]);
+  if (!deco.isConnected || deco.firstElementChild !== pieces[0]) return; // the page was redrawn meanwhile
+  const frame = deco.getBoundingClientRect();
+  const pad = $('lock').querySelector('.lock-inner').getBoundingClientRect();
+  const room = wide ? 46 : 14; // clear space around the PIN pad
+  const shown = placeRandomly(deco, pieces, [{ left: pad.left - frame.left - room, top: pad.top - frame.top - room, right: pad.right - frame.left + room, bottom: pad.bottom - frame.top + room }]);
+  shown.sort(() => Math.random() - 0.5).forEach((el, i) => {
+    el.style.animationDelay = first ? `${0.25 + i * 0.12}s` : '0s';
+    el.classList.add(first ? 'go' : 'shown');
+  });
+  $('lock').classList.toggle('intro', first);
 }
 
 // ---------- Public ----------

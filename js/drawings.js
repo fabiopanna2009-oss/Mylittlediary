@@ -62,3 +62,55 @@ export function wordScatter(words) {
   return h('div', { class: 'scatter' }, items);
 }
 
+
+// ---------- scattering things across a page ----------
+const between = (min, max) => min + Math.random() * (max - min);
+
+// One word as a scribble with a random size, tilt and colour.
+const INKS = ['var(--pen)', 'var(--caramel)', 'var(--ink-2)', 'var(--pen)', 'var(--ink-3)'];
+export function scribbleWord(text, i, big) {
+  const size = text.length <= 8 ? between(big ? 54 : 38, big ? 82 : 54) : between(big ? 36 : 26, big ? 54 : 36);
+  const penHand = i % 3 === 0; // some in the clearer pen hand (which runs larger, so it is scaled down)
+  const el = h('span', { class: `pop pop-word ${penHand ? 'pen-hand' : ''}`, style: { '--tilt': `${between(-16, 16).toFixed(1)}deg`, color: INKS[i % INKS.length], fontSize: `${(size * (penHand ? 0.62 : 1)).toFixed(0)}px` } }, text);
+  el.dataset.kind = 'word';
+  return el;
+}
+
+// Gives every element in `els` (already inside `container`) a random spot where it covers
+// neither another element nor one of the `avoid` rectangles ({ left, top, right, bottom } inside the container).
+// For each piece many random spots are tried and the one farthest from everything else is kept,
+// so the page fills evenly but never looks arranged. Pieces that find no room are removed.
+// Returns the elements that were placed.
+export function placeRandomly(container, els, avoid = []) {
+  const W = container.clientWidth;
+  const H = container.clientHeight;
+  const placed = avoid.map((r) => ({ cx: (r.left + r.right) / 2, cy: (r.top + r.bottom) / 2, bw: r.right - r.left, bh: r.bottom - r.top, fixed: true }));
+  const rank = { drawing: 0, photo: 0, line: 1, word: 2, place: 3, doodle: 4 }; // big things first, drawings fill the gaps
+  const queue = [...els].sort((x, y) => (rank[x.dataset.kind] ?? 3) - (rank[y.dataset.kind] ?? 3) || (y.offsetWidth * y.offsetHeight) - (x.offsetWidth * x.offsetHeight));
+  const done = [];
+  for (const el of queue) {
+    const w = el.offsetWidth;
+    const hgt = el.offsetHeight;
+    const rad = Math.abs(parseFloat(el.style.getPropertyValue('--tilt')) || 0) * Math.PI / 180;
+    const bw = w * Math.cos(rad) + hgt * Math.sin(rad); // the space it needs once tilted
+    const bh = w * Math.sin(rad) + hgt * Math.cos(rad);
+    let best = null;
+    if (bw < W - 8 && bh < H - 8) {
+      for (let attempt = 0; attempt < 80; attempt++) {
+        const cx = between(bw / 2 + 4, W - bw / 2 - 4);
+        const cy = between(bh / 2 + 4, H - bh / 2 - 4);
+        const gap = 8;
+        if (placed.some((p) => Math.abs(cx - p.cx) < (bw + p.bw) / 2 + gap && Math.abs(cy - p.cy) < (bh + p.bh) / 2 + gap)) continue;
+        const others = placed.filter((p) => !p.fixed);
+        const room = others.length ? Math.min(...others.map((p) => Math.hypot(cx - p.cx, cy - p.cy))) : 1e9;
+        if (!best || room > best.room) best = { cx, cy, room };
+      }
+    }
+    if (!best) { el.remove(); continue; } // no free spot left on this screen
+    placed.push({ cx: best.cx, cy: best.cy, bw, bh });
+    el.style.left = `${best.cx - w / 2}px`;
+    el.style.top = `${best.cy - hgt / 2}px`;
+    done.push(el);
+  }
+  return done;
+}
