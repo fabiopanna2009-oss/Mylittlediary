@@ -1367,14 +1367,12 @@ img.drawing { opacity: 0.92; }
 
 /* ---------- The first page: photographs under the title, a small drawing in the corner ---------- */
 .home-date { margin: 4px 0 0; font-family: var(--hand); font-size: 15px; color: var(--caramel); transform: rotate(-1.5deg); transform-origin: left; }
-.strip { display: flex; align-items: center; margin: 22px 0 6px; padding: 6px 4px; }
-.strip-photo { flex: 1 1 0; min-width: 0; max-width: 46%; margin-left: -4%; padding: 5px 5px 14px; background: #efe6d8; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45); transform: rotate(var(--tilt)); transition: transform 0.2s var(--ease); position: relative; }
+.strip { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 0; margin: 20px 0 6px; padding: 4px; }
+.strip-photo { flex: 0 0 auto; margin-left: -8px; padding: 4px 4px 10px; background: #efe6d8; box-shadow: 0 5px 14px rgba(0, 0, 0, 0.45); transform: rotate(var(--tilt)); transition: transform 0.2s var(--ease); position: relative; }
 .strip-photo:first-child { margin-left: 0; }
-.strip-photo:nth-child(even) { margin-top: 18px; }
-/* every photograph keeps its own shape (tall iPhone photos stay tall); nothing is cut off */
-.strip-photo img { display: block; width: 100%; height: auto; }
-.strip-1 .strip-photo { max-width: 240px; }
-.strip-2 .strip-photo { max-width: 42%; }
+.strip-photo:nth-child(even) { margin-top: 12px; }
+/* small on the page, each in its own shape; tap one to see it large */
+.strip-photo img { display: block; height: 104px; width: auto; max-width: 150px; object-fit: cover; }
 .strip-photo:active { transform: rotate(0deg) scale(1.05); z-index: 5; }
 .strip-links { display: flex; justify-content: space-between; gap: 12px; margin: 6px 0 18px; }
 .strip-empty { display: flex; align-items: center; justify-content: space-between; width: 100%; margin: 22px 0 18px; padding: 26px 18px; border: 1px dashed var(--rule-strong); font-family: var(--hand); font-size: 17px; color: var(--ink-3); }
@@ -1385,5 +1383,6 @@ img.drawing { opacity: 0.92; }
 .home.intro .strip-photo { animation: fadeIn 0.5s ease-out both; animation-delay: calc(0.3s + var(--i) * 0.12s); }
 @media (min-width: 900px) {
   .strip-photo:hover { transform: rotate(0deg) scale(1.06); z-index: 5; }
+  .strip-photo img { height: 132px; max-width: 190px; }
   .corner-sketch, .corner-own { margin-top: 70px; }
 }
