@@ -1372,7 +1372,7 @@ img.drawing { opacity: 0.92; }
 .strip-photo:first-child { margin-left: 0; }
 .strip-photo:nth-child(even) { margin-top: 12px; }
 /* small on the page, each in its own shape; tap one to see it large */
-.strip-photo img { display: block; height: 104px; width: auto; max-width: 150px; object-fit: cover; }
+.strip-photo img { display: block; height: 104px; width: auto; min-width: 56px; max-width: 150px; aspect-ratio: 3 / 4; object-fit: cover; }
 .strip-photo:active { transform: rotate(0deg) scale(1.05); z-index: 5; }
 .strip-links { display: flex; justify-content: space-between; gap: 12px; margin: 6px 0 18px; }
 .strip-empty { display: flex; align-items: center; justify-content: space-between; width: 100%; margin: 22px 0 18px; padding: 26px 18px; border: 1px dashed var(--rule-strong); font-family: var(--hand); font-size: 17px; color: var(--ink-3); }

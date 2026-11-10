@@ -21,7 +21,7 @@ import { CHATGPT_INSTRUCTIONS, parseImport, applyImport } from './importer.js';
 import { changePin, faceIdSupported, faceIdEnabled, enableFaceId, disableFaceId, getGate, addQuestion, removeQuestion, setGateEnabled } from './lock.js';
 import { createBackup, shareBackup, importBackup } from './backup.js';
 
-export const APP_VERSION = '4.17.2';
+export const APP_VERSION = '4.17.3';
 
 // ================= shared pieces =================
 
@@ -118,11 +118,19 @@ function photoStrip(items, nav, collections) {
   if (!shown.length) {
     return h('button', { class: 'strip-empty', onclick: () => nav.go('settings') }, 'Add photographs for this page', icon('arrow'));
   }
-  return h('div', { class: `strip strip-${shown.length}` }, shown.map((it, i) => h('button', {
-    class: 'strip-photo', 'aria-label': it.caption || 'Photograph',
-    style: { '--tilt': `${[-5, 3, -2, 5, -4][i]}deg`, '--i': String(i) },
-    onclick: () => openLightbox(items, i, nav, collections),
-  }, photoImg(it.photoId, 'thumb'))));
+  return h('div', { class: `strip strip-${shown.length}` }, shown.map((it, i) => {
+    const img = photoImg(it.photoId, 'thumb');
+    img.loading = 'eager'; // these are at the top of the page: load them straight away
+    // give the picture its own shape explicitly, so it never collapses to a sliver
+    const shape = () => { if (img.naturalWidth) img.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`; };
+    img.addEventListener('load', shape);
+    shape();
+    return h('button', {
+      class: 'strip-photo', 'aria-label': it.caption || 'Photograph',
+      style: { '--tilt': `${[-5, 3, -2, 5, -4][i]}deg`, '--i': String(i) },
+      onclick: () => openLightbox(items, i, nav, collections),
+    }, img);
+  }));
 }
 
 // A small pen drawing for the corner of the page: a bench under a lamp, and a few stars.
