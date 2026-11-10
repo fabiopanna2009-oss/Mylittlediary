@@ -1,42 +1,32 @@
-// views.js — every screen of the journal except the editor and the lock screen.
+// views.js — every screen except the editor and the lock screen.
 //
-// Design rules used throughout:
-//   - text and hairlines instead of boxes; not everything needs a container
-//   - the serif (Newsreader) for titles and quotes, the sans (Hanken Grotesk) for reading and navigation
-//   - walnut brown is the one accent colour; gold only for tiny details
-//   - photographs are shown as they are, with a thin white border at most
+//   Home       greeting, new note, recently edited, a few collections as entrances
+//   Notes      all notes: pinned first, then by month; sort by last edited or date created
+//   Memories   collections (words you tap) and all photographs
+//   Search     notes, collections and photo captions, with an optional month filter
+//
+// Design rules: text and hairlines instead of boxes; the serif for titles and meaningful words,
+// the sans for reading and controls; walnut is the one accent colour.
 
 import { db } from './db.js';
 import {
-  h, fill, icon, fmt, todayISO, friendlyDate, greeting, entryText, entryPhotos, byNewest, toast, ask, formatBytes, uid,
+  h, fill, icon, fmt, todayISO, friendlyDate, greeting, toast, ask, sheet, formatBytes, uid,
   pickFiles, pauseAutoLock, resumeAutoLock,
 } from './util.js';
-import { KINDS, moodById, promptOfTheDay } from './content.js';
-import { photoImg, photoURL, printFigure } from './photos.js';
+import { noteTitle, noteExcerpt } from './notes.js';
+import { photoImg, photoURL } from './photos.js';
 import { changePin, faceIdSupported, faceIdEnabled, enableFaceId, disableFaceId } from './lock.js';
 import { createBackup, shareBackup, importBackup } from './backup.js';
 
-export const APP_VERSION = '2.0.0';
-
-// Chapters listed on the Contents screen (Journal and Photos have their own tabs).
-export const CHAPTERS = [
-  { route: 'thoughts',    kind: 'thought', title: 'Today’s thoughts', sub: 'Whatever is on your mind' },
-  { route: 'letters',     kind: 'letter',  title: 'Letters',          sub: 'Written, perhaps never sent' },
-  { route: 'memories',    kind: 'memory',  title: 'Memories',         sub: 'Moments to keep' },
-  { route: 'details',     kind: 'detail',  title: 'Little details',   sub: 'The small things you remember' },
-  { route: 'timeline',    kind: null,      title: 'Timeline',         sub: 'The dates that mattered' },
-  { route: 'collections', kind: null,      title: 'Collections',      sub: 'Memories that belong together' },
-  { route: 'favourites',  kind: null,      title: 'Favourites',       sub: 'The pages that mean the most' },
-];
-const chapter = (route) => CHAPTERS.find((c) => c.route === route);
+export const APP_VERSION = '3.0.0';
 
 // ================= shared pieces =================
 
-function screen(...children) {
-  return h('main', { class: 'screen enter' }, ...children);
-}
+const screen = (...children) => h('main', { class: 'screen enter' }, ...children);
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+const iso = (ms) => todayISO(new Date(ms));
+const byOrder = (a, b) => (a.order ?? 0) - (b.order ?? 0) || a.createdAt - b.createdAt;
 
-// Top bar for screens you navigated into (with a back button).
 function bar(nav, { title = '', actions = [] } = {}) {
   return h('header', { class: 'bar' },
     h('button', { class: 'icon-btn', 'aria-label': 'Back', onclick: () => nav.back() }, icon('back')),
@@ -45,13 +35,10 @@ function bar(nav, { title = '', actions = [] } = {}) {
   );
 }
 
-function head({ eyebrow = null, title, lede = null, action = null, display = false, tab = false }) {
+function head({ eyebrow = null, title, lede = null, action = null, tab = false }) {
   return h('header', { class: `head ${tab ? 'tab-head' : ''}` },
     eyebrow ? h('div', { class: 'eyebrow' }, eyebrow) : null,
-    h('div', { class: 'head-row' },
-      h('h1', { class: display ? 'display' : 'title-1' }, title),
-      action,
-    ),
+    h('div', { class: 'head-row' }, h('h1', { class: 'title-1' }, title), action),
     lede ? h('p', { class: 'lede' }, lede) : null,
   );
 }
@@ -60,165 +47,130 @@ function textLink(label, onclick, { quiet = false, arrow = false } = {}) {
   return h('button', { class: `link ${quiet ? 'quiet' : ''}`, onclick }, label, arrow ? icon('arrow') : null);
 }
 
-function emptyBlock(text, linkLabel, onClick) {
-  return h('div', { class: 'empty' },
-    h('p', {}, text),
-    linkLabel ? textLink(linkLabel, onClick, { arrow: true }) : null,
-  );
+// A short, human date: "Today", "Yesterday", "12 March" or "12 March 2024".
+function shortDate(ms) {
+  const d = iso(ms);
+  const today = todayISO();
+  if (d === today) return new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  if (d === todayISO(new Date(Date.now() - 86400000))) return 'Yesterday';
+  return d.slice(0, 4) === today.slice(0, 4) ? fmt.medium(d).replace(/ \d{4}$/, '') : fmt.medium(d);
 }
 
-// Thoughts and little details usually have no title: their own words become the title.
-function displayTitle(e) {
-  if (e.title?.trim()) return e.title.trim();
-  if (e.kind === 'thought' || e.kind === 'detail') {
-    const first = entryText(e).split('\n').find((l) => l.trim());
-    if (first) return first.length > 90 ? `${first.slice(0, 88).trim()}…` : first;
-  }
-  return (KINDS[e.kind] || KINDS.entry).emptyTitle;
-}
-
-const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-
-// One page in a list: the day on the left, title and first lines, a small photo on the right.
-function entryRow(e, nav, order) {
-  const photo = entryPhotos(e)[0];
-  const wordsAsTitle = !e.title?.trim() && (e.kind === 'thought' || e.kind === 'detail');
-  const text = wordsAsTitle ? '' : entryText(e).replace(/^Dear[^\n]*\n+/i, '');
-  const meta = [e.kind !== 'entry' ? KINDS[e.kind]?.one.replace(/^An? /, '') : null, e.time || null].filter(Boolean).join(' · ');
+// One note in a list: title, then date and the first words; a small photo if it has one.
+function noteRow(n, nav, dateKey = 'updatedAt') {
+  const excerpt = noteExcerpt(n);
+  const photo = (n.photos || [])[0];
   return h('li', {},
-    h('button', { class: `entry-row kind-${e.kind}`, onclick: () => nav.read(e.id, order) },
-      h('span', { class: 'row-date' },
-        h('span', { class: 'row-day' }, fmt.day(e.date)),
-        h('span', { class: 'row-wd' }, fmt.weekdayShort(e.date)),
+    h('button', { class: 'note-row', onclick: () => nav.open(n.id) },
+      h('span', { class: 'note-row-body' },
+        h('span', { class: 'note-row-title' }, n.pinned ? icon('pin', 'row-pin') : null, noteTitle(n)),
+        h('span', { class: 'note-row-sub' },
+          h('span', { class: 'note-row-date' }, shortDate(n[dateKey])),
+          excerpt ? h('span', { class: 'note-row-text' }, excerpt) : (photo ? h('span', { class: 'note-row-text' }, plural(n.photos.length, 'photograph', 'photographs')) : null),
+        ),
       ),
-      h('span', { class: 'row-body' },
-        meta ? h('span', { class: 'row-meta' }, meta) : null,
-        h('span', { class: 'row-title' }, displayTitle(e), e.favorite ? icon('star', 'row-flag') : null),
-        text ? h('span', { class: 'row-excerpt' }, text.slice(0, 220)) : null,
-      ),
-      photo ? h('span', { class: 'row-thumb' }, photoImg(photo.photoId, 'thumb')) : h('span', {}),
+      photo ? h('span', { class: 'row-thumb' }, photoImg(photo.photoId, 'thumb')) : null,
     ),
   );
 }
 
-// Entries grouped by month, newest first. The reader flips forward in time (oldest → newest).
-function monthGroups(entries, nav) {
-  const sorted = [...entries].sort(byNewest);
-  const order = [...sorted].reverse().map((e) => e.id);
+function noteList(notes, nav, dateKey) {
+  return h('ul', { class: 'rows' }, notes.map((n) => noteRow(n, nav, dateKey)));
+}
+
+// Notes grouped by month (newest first).
+function monthGroups(notes, nav, dateKey) {
+  const sorted = [...notes].sort((a, b) => b[dateKey] - a[dateKey]);
   const groups = [];
-  for (const e of sorted) {
-    const key = e.date.slice(0, 7);
+  for (const n of sorted) {
+    const key = iso(n[dateKey]).slice(0, 7);
     let g = groups[groups.length - 1];
     if (!g || g.key !== key) { g = { key, items: [] }; groups.push(g); }
-    g.items.push(e);
+    g.items.push(n);
   }
   return groups.map((g) => h('section', { class: 'month' },
     h('div', { class: 'month-head' },
       h('h2', { class: 'month-name' }, fmt.monthYear(`${g.key}-01`)),
-      h('span', { class: 'month-count' }, plural(g.items.length, 'page', 'pages')),
+      h('span', { class: 'month-count' }, g.items.length),
     ),
-    h('ul', { class: 'rows' }, g.items.map((e) => entryRow(e, nav, order))),
+    noteList(g.items, nav, dateKey),
   ));
 }
 
-// A number that changes every day, so the featured memory changes daily but not on every visit.
-function daySeed() {
-  return Math.floor(Date.now() / 86400000);
+// A collection as an entrance: a meaningful word you tap.
+function wordEntrance(c, notes, nav, extra = null) {
+  const inside = notes.filter((n) => (n.collections || []).includes(c.id));
+  const photos = inside.reduce((sum, n) => sum + (n.photos || []).length, 0);
+  const sub = c.description?.trim()
+    || [inside.length ? plural(inside.length, 'note', 'notes') : 'Nothing here yet', photos ? plural(photos, 'photograph', 'photographs') : null].filter(Boolean).join(' · ');
+  return h('li', { class: 'word-item' },
+    h('button', { class: 'word', onclick: () => nav.go(`collection/${c.id}`) },
+      h('span', { class: 'word-text' },
+        h('span', { class: 'word-name' }, c.name),
+        h('span', { class: 'word-sub' }, sub),
+      ),
+      c.coverPhotoId ? h('span', { class: 'word-cover' }, photoImg(c.coverPhotoId, 'thumb')) : null,
+    ),
+    extra,
+  );
 }
 
-// ================= TODAY (home) =================
+async function createCollection() {
+  const name = await ask({ title: 'New collection', message: 'A word or a name that means something to you.', input: '', placeholder: 'e.g. September', ok: 'Create' });
+  if (!name) return null;
+  const all = await db.allCollections();
+  const c = { id: uid(), name, description: '', order: all.length ? Math.max(...all.map((x) => x.order ?? 0)) + 1 : 0, createdAt: Date.now() };
+  await db.saveCollection(c);
+  return c;
+}
+
+// ================= HOME =================
 
 export async function renderHome(root, nav) {
-  const [entries, bookTitle, lastBackup] = await Promise.all([
-    db.allEntries(), db.getSetting('bookTitle', 'Little Memories'), db.getSetting('lastBackup'),
+  const [notes, collections, bookTitle, lastBackup] = await Promise.all([
+    db.allEntries(), db.allCollections(), db.getSetting('bookTitle', 'Little Memories'), db.getSetting('lastBackup'),
   ]);
   const now = new Date();
-  const today = todayISO(now);
-  const prompt = promptOfTheDay(now);
-  const writtenToday = entries.filter((e) => e.date === today).length;
-  const sorted = [...entries].sort(byNewest);
-
-  // ----- featured memory -----
-  let featured = null;
-  const withPhotos = sorted.filter((e) => entryPhotos(e).length);
-  const seed = daySeed();
-  const pickSeeded = (list) => list[seed % list.length];
-  const otd = withPhotos.filter((e) => e.date.slice(5) === today.slice(5) && e.date < today);
-  const favPhotos = withPhotos.filter((e) => e.favorite);
-  const olderPhotos = withPhotos.filter((e) => (now - new Date(e.createdAt)) > 3 * 86400000);
-  if (otd.length) featured = { entry: otd[0], label: `On this day, ${otd[0].date.slice(0, 4)}` };
-  else if (favPhotos.length) featured = { entry: pickSeeded(favPhotos), label: 'A favourite' };
-  else if (olderPhotos.length) featured = { entry: pickSeeded(olderPhotos), label: 'From your pages' };
-  else if (withPhotos.length) featured = { entry: withPhotos[0], label: 'Recently' };
-  if (featured) {
-    const photos = entryPhotos(featured.entry);
-    featured.photo = photos[seed % photos.length];
-  } else if (entries.length >= 3) {
-    const candidates = sorted.filter((e) => entryText(e).length > 40 && (e.favorite || e.kind === 'memory' || e.milestone || e.kind === 'detail'));
-    const pool = candidates.length ? candidates : sorted.slice(2).filter((e) => entryText(e).length > 40);
-    if (pool.length) featured = { entry: pickSeeded(pool), label: 'From your pages' };
-  }
-
-  const recent = sorted.slice(0, 3);
-  const order = [...sorted].reverse().map((e) => e.id);
-  const needsBackup = entries.length > 0 && (!lastBackup || Date.now() - lastBackup > 14 * 86400000);
-
-  let featuredEl = null;
-  if (featured?.photo) {
-    const e = featured.entry;
-    const open = () => nav.read(e.id, order);
-    featuredEl = h('section', { class: 'featured' },
-      h('div', { class: 'eyebrow' }, featured.label),
-      h('button', { class: 'featured-photo', 'aria-label': 'Open this memory', onclick: open }, photoImg(featured.photo.photoId, 'full')),
-      h('button', { class: 'featured-caption', onclick: open },
-        h('span', { class: 'quote' }, featured.photo.caption || displayTitle(e)),
-        h('span', { class: 'link' }, fmt.dots(featured.photo.date || e.date)),
-      ),
-    );
-  } else if (featured) {
-    const e = featured.entry;
-    featuredEl = h('section', { class: 'featured' },
-      h('div', { class: 'eyebrow' }, featured.label),
-      h('button', { class: 'featured-text', onclick: () => nav.read(e.id, order) },
-        `“${entryText(e).replace(/\s+/g, ' ').slice(0, 170).trim()}${entryText(e).length > 170 ? '…' : ''}”`,
-        h('span', { class: 'eyebrow' }, `${displayTitle(e)} · ${fmt.medium(e.date)}`),
-      ),
-    );
-  }
+  const recent = [...notes].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 4);
+  const words = [...collections].sort(byOrder).slice(0, 6);
+  const needsBackup = notes.length > 0 && (!lastBackup || Date.now() - lastBackup > 14 * 86400000);
 
   fill(root, screen(
     h('div', { class: 'home-top' },
-      h('div', { class: 'eyebrow' }, friendlyDate(today)),
-      h('button', { class: 'icon-btn', 'aria-label': 'Lock the journal', onclick: () => nav.lock() }, icon('lock')),
+      h('div', { class: 'eyebrow' }, friendlyDate(todayISO(now))),
+      h('div', { class: 'bar-actions' },
+        h('button', { class: 'icon-btn', 'aria-label': 'Lock the journal', onclick: () => nav.lock() }, icon('lock')),
+        h('button', { class: 'icon-btn', 'aria-label': 'Settings', onclick: () => nav.go('settings') }, icon('settings')),
+      ),
     ),
     h('p', { class: 'home-greeting' }, greeting(now)),
     h('h1', { class: 'display home-title' }, bookTitle || 'Little Memories'),
 
-    h('section', { class: 'invite' },
-      h('button', { class: 'invite-main', onclick: () => nav.go(`write?kind=entry&prompt=${encodeURIComponent(prompt)}`) },
-        h('span', { class: 'eyebrow' }, writtenToday ? `Today · ${plural(writtenToday, 'page', 'pages')} written` : 'Today’s page'),
-        h('span', { class: 'invite-prompt' }, prompt),
-        h('span', { class: 'invite-begin' }, writtenToday ? 'Write another page' : 'Begin writing', icon('arrow')),
+    h('button', { class: 'new-note', onclick: () => nav.compose() },
+      h('span', { class: 'new-note-text' }, 'New note'),
+      icon('compose'),
+    ),
+    h('button', { class: 'search-entry', onclick: () => nav.tab('search') }, icon('search'), 'Search your journal'),
+
+    h('section', { class: 'section' },
+      h('div', { class: 'section-head' },
+        h('h2', { class: 'eyebrow' }, 'Recently edited'),
+        notes.length > recent.length ? textLink('All notes', () => nav.tab('notes'), { arrow: true }) : null,
       ),
-      h('div', { class: 'invite-alt' },
-        h('span', { class: 'muted' }, 'Or write'),
-        textLink('a thought', () => nav.go('write?kind=thought')),
-        textLink('a letter', () => nav.go('write?kind=letter')),
-        textLink('a memory', () => nav.go('write?kind=memory')),
-      ),
+      recent.length
+        ? noteList(recent, nav, 'updatedAt')
+        : h('p', { class: 'empty-note' }, 'Nothing written yet. A thought, a memory, a single line. Begin anywhere.'),
     ),
 
-    featuredEl,
-
-    recent.length
-      ? h('section', { class: 'section' },
-        h('div', { class: 'section-head' },
-          h('h2', { class: 'eyebrow' }, 'Recently'),
-          textLink('All pages', () => nav.tab('journal'), { arrow: true }),
-        ),
-        h('ul', { class: 'rows' }, recent.map((e) => entryRow(e, nav, order))),
-      )
-      : h('p', { class: 'empty-note' }, 'This book is still empty. Nothing you write here has to be perfect. It only has to be yours.'),
+    h('section', { class: 'section' },
+      h('div', { class: 'section-head' },
+        h('h2', { class: 'eyebrow' }, 'Memories'),
+        textLink(collections.length > words.length ? 'All collections' : 'Open', () => nav.tab('memories'), { arrow: true }),
+      ),
+      words.length
+        ? h('ul', { class: 'words' }, words.map((c) => wordEntrance(c, notes, nav)))
+        : h('p', { class: 'empty-note' }, 'Collections gather notes that belong together, under a word that means something to you.'),
+    ),
 
     needsBackup ? h('button', { class: 'backup-note', onclick: () => nav.go('settings') },
       h('span', {}, lastBackup ? 'It’s been a while since your last backup.' : 'You haven’t made a backup yet.'),
@@ -227,545 +179,224 @@ export async function renderHome(root, nav) {
   ));
 }
 
-// ================= JOURNAL (list + calendar) =================
+// ================= NOTES =================
 
-let journalFilter = 'all';
-
-function journalHead(nav, mode) {
-  return h('div', {},
-    head({
-      title: 'Journal',
-      tab: true,
-      action: h('div', { class: 'bar-actions' },
-        h('button', { class: 'icon-btn', 'aria-label': 'Search', onclick: () => nav.go('search') }, icon('search')),
-        h('button', { class: 'icon-btn', 'aria-label': 'New page', onclick: () => nav.go('write?kind=entry') }, icon('compose')),
-      ),
-    }),
-    h('div', { class: 'segments', role: 'tablist' },
-      h('button', { class: 'segment', role: 'tab', 'aria-selected': String(mode === 'list'), onclick: () => mode !== 'list' && nav.tab('journal') }, 'Pages'),
-      h('button', { class: 'segment', role: 'tab', 'aria-selected': String(mode === 'calendar'), onclick: () => mode !== 'calendar' && nav.tab('calendar') }, 'Calendar'),
-    ),
-  );
-}
-
-export async function renderJournal(root, nav) {
-  const entries = await db.allEntries();
+export async function renderNotes(root, nav) {
+  const notes = await db.allEntries();
+  let sort = await db.getSetting('noteSort', 'updatedAt');
   const list = h('div', {});
-  const kinds = [['all', 'All'], ['entry', 'Entries'], ['thought', 'Thoughts'], ['letter', 'Letters'], ['memory', 'Memories'], ['detail', 'Details']]
-    .filter(([k]) => k === 'all' || entries.some((e) => e.kind === k));
-  if (!kinds.some(([k]) => k === journalFilter)) journalFilter = 'all';
-
-  const filters = h('div', { class: 'filters' }, kinds.map(([k, label]) => h('button', {
-    class: 'filter',
-    'aria-pressed': String(k === journalFilter),
-    onclick: (ev) => {
-      journalFilter = k;
-      filters.querySelectorAll('.filter').forEach((f) => f.setAttribute('aria-pressed', 'false'));
-      ev.currentTarget.setAttribute('aria-pressed', 'true');
-      draw();
-    },
-  }, label)));
+  const sortBtn = h('button', { class: 'link quiet sort' });
 
   function draw() {
-    const shown = journalFilter === 'all' ? entries : entries.filter((e) => e.kind === journalFilter);
-    list.replaceChildren(...(shown.length
-      ? monthGroups(shown, nav)
-      : [emptyBlock('Your journal is still empty. The first page is waiting for you.', 'Begin writing', () => nav.go('write?kind=entry'))]));
+    sortBtn.textContent = sort === 'updatedAt' ? 'Sorted by last edited' : 'Sorted by date created';
+    const pinned = notes.filter((n) => n.pinned).sort((a, b) => b[sort] - a[sort]);
+    const rest = notes.filter((n) => !n.pinned);
+    fill(list,
+      pinned.length ? h('section', { class: 'month' },
+        h('div', { class: 'month-head' }, h('h2', { class: 'month-name' }, 'Pinned'), h('span', { class: 'month-count' }, pinned.length)),
+        noteList(pinned, nav, sort),
+      ) : null,
+      monthGroups(rest, nav, sort),
+      notes.length ? null : h('div', { class: 'empty' },
+        h('p', {}, 'Your notes will gather here. The first one is waiting.'),
+        textLink('Write a note', () => nav.compose(), { arrow: true }),
+      ),
+    );
   }
+  sortBtn.addEventListener('click', async () => {
+    sort = sort === 'updatedAt' ? 'createdAt' : 'updatedAt';
+    await db.setSetting('noteSort', sort);
+    draw();
+  });
   draw();
 
   fill(root, screen(
-    journalHead(nav, 'list'),
-    kinds.length > 2 ? filters : null,
+    head({ title: 'Notes', tab: true, lede: notes.length ? plural(notes.length, 'note', 'notes') : null }),
+    notes.length > 1 ? h('div', { class: 'list-tools' }, sortBtn) : null,
     list,
   ));
 }
 
-export async function renderCalendar(root, nav, monthParam, selectedParam) {
-  const entries = await db.allEntries();
-  const byDate = new Map();
-  entries.forEach((e) => { if (!byDate.has(e.date)) byDate.set(e.date, []); byDate.get(e.date).push(e); });
+// ================= MEMORIES (collections + photographs) =================
 
-  const today = todayISO();
-  let selected = selectedParam || today;
-  let month = monthParam || selected.slice(0, 7);
+function memoriesHead(nav, mode, action) {
+  return h('div', {},
+    head({ title: 'Memories', tab: true, action }),
+    h('div', { class: 'segments', role: 'tablist' },
+      h('button', { class: 'segment', role: 'tab', 'aria-selected': String(mode === 'collections'), onclick: () => mode !== 'collections' && nav.tab('memories') }, 'Collections'),
+      h('button', { class: 'segment', role: 'tab', 'aria-selected': String(mode === 'photos'), onclick: () => mode !== 'photos' && nav.tab('photos') }, 'Photographs'),
+    ),
+  );
+}
 
-  const title = h('h2', { class: 'cal-month' });
-  const grid = h('div', { class: 'cal-grid', role: 'grid' });
-  const dayList = h('div', { class: 'cal-list' });
+let arranging = false;
 
-  function draw() {
-    const [y, m] = month.split('-').map(Number);
-    title.textContent = fmt.monthYear(`${month}-01`);
-    const offset = (new Date(y, m - 1, 1).getDay() + 6) % 7; // weeks start on Monday
-    const days = new Date(y, m, 0).getDate();
-    const cells = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((d) => h('div', { class: 'cal-wd', role: 'columnheader' }, d));
-    for (let d = 1; d <= days; d++) {
-      const iso = `${month}-${String(d).padStart(2, '0')}`;
-      const count = (byDate.get(iso) || []).length;
-      cells.push(h('button', {
-        class: ['cal-day', count && 'has', iso === today && 'today', iso === selected && 'selected'].filter(Boolean).join(' '),
-        'aria-label': `${fmt.long(iso)}${count ? `, ${plural(count, 'page', 'pages')}` : ''}`,
-        style: d === 1 ? { gridColumnStart: String(offset + 1) } : null,
-        onclick: () => { selected = iso; nav.replace(`calendar?m=${month}&d=${selected}`); draw(); },
-      }, h('span', { class: 'cal-num' }, d)));
-    }
-    grid.replaceChildren(...cells);
+export async function renderMemories(root, nav) {
+  const [notes, collections] = await Promise.all([db.allEntries(), db.allCollections()]);
+  collections.sort(byOrder);
 
-    const dayEntries = (byDate.get(selected) || []).sort(byNewest);
-    const order = [...dayEntries].reverse().map((e) => e.id);
-    fill(dayList, 
-      h('div', { class: 'cal-list-head' },
-        h('h3', { class: 'eyebrow' }, fmt.long(selected)),
-        textLink(dayEntries.length ? 'Add a page' : 'Write on this day', () => nav.go(`write?kind=entry&date=${selected}`)),
-      ),
-      dayEntries.length
-        ? h('ul', { class: 'rows' }, dayEntries.map((e) => entryRow(e, nav, order)))
-        : h('p', { class: 'empty-note' }, 'Nothing written on this day.'),
-    );
-  }
-
-  const shift = (d) => {
-    const [y, m] = month.split('-').map(Number);
-    const n = new Date(y, m - 1 + d, 1);
-    month = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
-    nav.replace(`calendar?m=${month}&d=${selected}`);
-    draw();
+  const move = async (index, dir) => {
+    const target = index + dir;
+    if (target < 0 || target >= collections.length) return;
+    [collections[index], collections[target]] = [collections[target], collections[index]];
+    collections.forEach((c, i) => { c.order = i; });
+    await db.saveCollections(collections);
+    renderMemories(root, nav);
   };
 
-  // Swipe left/right on the month to change it.
-  let sx = 0;
-  grid.addEventListener('touchstart', (ev) => { sx = ev.touches[0].clientX; }, { passive: true });
-  grid.addEventListener('touchend', (ev) => {
-    const dx = ev.changedTouches[0].clientX - sx;
-    if (Math.abs(dx) > 60) shift(dx < 0 ? 1 : -1);
-  });
-
-  draw();
   fill(root, screen(
-    journalHead(nav, 'calendar'),
-    h('div', { class: 'cal-head' },
-      title,
-      h('div', { class: 'cal-nav' },
-        h('button', { class: 'icon-btn', 'aria-label': 'Previous month', onclick: () => shift(-1) }, icon('left')),
-        h('button', { class: 'icon-btn', 'aria-label': 'Next month', onclick: () => shift(1) }, icon('right')),
-      ),
-    ),
-    grid,
-    dayList,
+    memoriesHead(nav, 'collections', textLink('New', async () => { if (await createCollection()) renderMemories(root, nav); })),
+    collections.length
+      ? h('ul', { class: `words ${arranging ? 'arranging' : ''}` }, collections.map((c, i) => wordEntrance(c, notes, nav, arranging ? h('div', { class: 'word-move' },
+        h('button', { class: 'link quiet', disabled: i === 0, onclick: () => move(i, -1) }, 'Move up'),
+        h('button', { class: 'link quiet', disabled: i === collections.length - 1, onclick: () => move(i, 1) }, 'Move down'),
+      ) : null)))
+      : h('p', { class: 'empty-note' }, 'No collections yet. Create one for a place, a person, a season, or anything that holds memories together.'),
+    collections.length > 1 ? h('div', { class: 'list-foot' },
+      textLink(arranging ? 'Done arranging' : 'Change the order', () => { arranging = !arranging; renderMemories(root, nav); }, { quiet: !arranging }),
+    ) : null,
   ));
 }
 
-// ================= PHOTOGRAPHS =================
-
-export async function renderGallery(root, nav) {
-  const entries = (await db.allEntries()).sort(byNewest);
-  const items = entries.flatMap((e) => entryPhotos(e).map((p) => ({ ...p, entry: e })));
-  const pages = new Set(items.map((i) => i.entry.id)).size;
+export async function renderPhotos(root, nav) {
+  const [notes, collections] = await Promise.all([db.allEntries(), db.allCollections()]);
+  const items = notes.flatMap((n) => (n.photos || []).map((p) => ({ ...p, note: n, when: p.date || iso(n.createdAt) })))
+    .sort((a, b) => b.when.localeCompare(a.when));
 
   const groups = [];
   for (const it of items) {
-    const key = (it.date || it.entry.date).slice(0, 7);
-    let g = groups.find((x) => x.key === key);
-    if (!g) { g = { key, items: [] }; groups.push(g); }
+    const key = it.when.slice(0, 7);
+    let g = groups[groups.length - 1];
+    if (!g || g.key !== key) { g = { key, items: [] }; groups.push(g); }
     g.items.push(it);
   }
-  groups.sort((a, b) => b.key.localeCompare(a.key));
-  const flat = groups.flatMap((g) => g.items);
 
   fill(root, screen(
-    head({
-      title: 'Photographs',
-      tab: true,
-      lede: items.length ? `${plural(items.length, 'photograph', 'photographs')}, from ${plural(pages, 'page', 'pages')}` : null,
-    }),
+    memoriesHead(nav, 'photos', null),
     items.length
       ? groups.map((g) => h('section', { class: 'month' },
         h('div', { class: 'month-head' },
           h('h2', { class: 'month-name' }, fmt.monthYear(`${g.key}-01`)),
           h('span', { class: 'month-count' }, g.items.length),
         ),
-        h('div', { class: 'gallery-grid' }, g.items.map((it, i) => h('button', {
-          class: `gallery-item ${i === 0 && g.items.length >= 3 ? 'lead' : ''}`,
-          'aria-label': it.caption || `Photo from ${fmt.medium(it.entry.date)}`,
-          onclick: () => openLightbox(flat, flat.indexOf(it), nav),
-        }, photoImg(it.photoId, i === 0 && g.items.length >= 3 ? 'full' : 'thumb')))),
+        h('div', { class: 'gallery-grid' }, g.items.map((it) => h('button', {
+          class: 'gallery-item',
+          'aria-label': it.caption || `Photograph from ${fmt.medium(it.when)}`,
+          onclick: () => openLightbox(items, items.indexOf(it), nav, collections),
+        }, photoImg(it.photoId, 'thumb')))),
       ))
-      : emptyBlock('No photographs yet. Add pictures to any page and they will gather here.', 'Write a page', () => nav.go('write?kind=entry')),
+      : h('p', { class: 'empty-note' }, 'Photographs you add to your notes will gather here.'),
   ));
 }
 
-// ================= CONTENTS =================
-
-export async function renderContents(root, nav) {
-  const [entries, collections] = await Promise.all([db.allEntries(), db.allCollections()]);
-  const count = {
-    thoughts: entries.filter((e) => e.kind === 'thought').length,
-    letters: entries.filter((e) => e.kind === 'letter').length,
-    memories: entries.filter((e) => e.kind === 'memory').length,
-    details: entries.filter((e) => e.kind === 'detail').length,
-    timeline: entries.filter((e) => e.milestone).length,
-    collections: collections.length,
-    favourites: entries.filter((e) => e.favorite).length,
-  };
-
-  fill(root, screen(
-    head({ title: 'Contents', tab: true }),
-    h('ol', { class: 'toc' }, CHAPTERS.map((c, i) => h('li', {},
-      h('button', { class: 'toc-item', onclick: () => nav.go(c.route) },
-        h('span', { class: 'toc-num' }, String(i + 1).padStart(2, '0')),
-        h('span', {}, h('span', { class: 'toc-name' }, c.title), h('span', { class: 'toc-sub' }, c.sub)),
-        h('span', { class: 'toc-count' }, count[c.route] || ''),
-      )))),
-    h('ul', { class: 'plain-list' },
-      h('li', {}, h('button', { class: 'plain-item', onclick: () => nav.go('search') }, 'Search', icon('search'))),
-      h('li', {}, h('button', { class: 'plain-item', onclick: () => nav.go('settings') }, 'Settings & backup', icon('chevron'))),
-      h('li', {}, h('button', { class: 'plain-item', onclick: () => nav.lock() }, 'Lock now', icon('lock'))),
-    ),
-  ));
-}
-
-// ================= CHAPTER LISTS =================
-
-export async function renderList(root, nav, route) {
-  const c = chapter(route);
-  let entries = await db.allEntries();
-  entries = route === 'favourites' ? entries.filter((e) => e.favorite) : entries.filter((e) => e.kind === c.kind);
-  const kind = c.kind || 'entry';
-
-  const emptyText = {
-    thoughts: 'No thoughts yet. Write whatever is on your mind. No title needed.',
-    letters: 'No letters yet. Write one you may never send.',
-    memories: 'No memories yet. Keep a moment you never want to forget.',
-    favourites: 'No favourites yet. Tap the star on a page that means a lot to you.',
-  }[route];
-
-  // The first time you open Letters, ask who they are for. The name is saved only on this phone.
-  if (route === 'letters' && (await db.getSetting('letterTo')) === null) {
-    setTimeout(async () => {
-      const name = await ask({
-        title: 'Who are your letters for?',
-        message: 'New letters will begin with “Dear …”. The name stays only on this phone, and you can change it in Settings.',
-        input: '', placeholder: 'A name', ok: 'Save', cancel: 'Skip',
-      });
-      await db.setSetting('letterTo', name || '');
-    }, 350);
-  }
-
-  fill(root, 
-    bar(nav),
-    screen(
-      head({
-        title: c.title,
-        lede: c.sub,
-        action: route === 'favourites' ? null : textLink('New', () => nav.go(`write?kind=${kind}`)),
-      }),
-      entries.length ? monthGroups(entries, nav) : emptyBlock(emptyText, route === 'favourites' ? null : 'Begin writing', () => nav.go(`write?kind=${kind}`)),
-    ),
-  );
-}
-
-// ================= LITTLE DETAILS =================
-
-export async function renderDetails(root, nav) {
-  const c = chapter('details');
-  const entries = (await db.allEntries()).filter((e) => e.kind === 'detail').sort(byNewest);
-  const order = [...entries].reverse().map((e) => e.id);
-
-  const quick = h('textarea', {
-    rows: 2,
-    placeholder: 'The way she laughs… her voice when… write it down before it fades.',
-    oninput: (e) => { e.target.style.height = 'auto'; e.target.style.height = `${e.target.scrollHeight}px`; },
-  });
-  const keep = async () => {
-    const text = quick.value.trim();
-    if (!text) { quick.focus(); return; }
-    const now = Date.now();
-    await db.saveEntry({
-      id: uid(), kind: 'detail', title: '', date: todayISO(), time: '', mood: null,
-      blocks: [{ type: 'text', text }], collections: [], favorite: false, milestone: false,
-      createdAt: now, updatedAt: now,
-    });
-    toast('Kept');
-    renderDetails(root, nav);
-  };
-
-  fill(root, 
-    bar(nav),
-    screen(
-      head({ title: c.title, lede: 'Her laugh, her voice, the way she smiled. All the tiny things you remember.' }),
-      h('div', { class: 'quick' },
-        quick,
-        h('div', { class: 'quick-row' },
-          textLink('Add with a photo', () => nav.go('write?kind=detail'), { quiet: true }),
-          textLink('Keep', keep, { arrow: true }),
-        ),
-      ),
-      entries.length
-        ? h('div', { class: 'fragments' }, entries.map((e) => {
-          const photo = entryPhotos(e)[0];
-          return h('button', { class: 'fragment', onclick: () => nav.read(e.id, order) },
-            photo ? h('div', { class: 'fragment-photo' }, photoImg(photo.photoId, 'thumb')) : null,
-            h('span', { class: 'fragment-text' }, e.title?.trim() || entryText(e).slice(0, 240) || '…'),
-            h('span', { class: 'caption-date' }, fmt.medium(e.date)),
-          );
-        }))
-        : h('p', { class: 'empty-note' }, 'Nothing here yet. Even the smallest detail is worth keeping.'),
-    ),
-  );
-}
-
-// ================= TIMELINE =================
-
-export async function renderTimeline(root, nav) {
-  const c = chapter('timeline');
-  const items = (await db.allEntries()).filter((e) => e.milestone).sort(byNewest).reverse();
-  const order = items.map((e) => e.id);
-
-  const list = [];
-  let year = null;
-  for (const e of items) {
-    const y = e.date.slice(0, 4);
-    if (y !== year) { year = y; list.push(h('li', { class: 'tl-year', 'aria-hidden': 'true' }, y)); }
-    const photo = entryPhotos(e)[0];
-    const text = entryText(e);
-    list.push(h('li', { class: 'tl-item' },
-      h('button', { class: 'tl-card', onclick: () => nav.read(e.id, order) },
-        h('span', { class: 'eyebrow' }, fmt.medium(e.date)),
-        h('span', { class: 'tl-title' }, displayTitle(e)),
-        text ? h('span', { class: 'tl-text' }, text.slice(0, 150)) : null,
-        photo ? h('span', { class: 'tl-photo' }, photoImg(photo.photoId, 'full')) : null,
-      )));
-  }
-
-  fill(root, 
-    bar(nav),
-    screen(
-      head({ title: c.title, lede: c.sub, action: textLink('Add a date', () => nav.go('write?kind=memory&milestone=1')) }),
-      items.length
-        ? h('ol', { class: 'timeline' }, list)
-        : emptyBlock('No important dates yet. Turn on “Important date” on any page, or add one here.', 'Add a date', () => nav.go('write?kind=memory&milestone=1')),
-    ),
-  );
-}
-
-// ================= COLLECTIONS =================
-
-export async function renderCollections(root, nav) {
-  const c = chapter('collections');
-  const [collections, entries] = await Promise.all([db.allCollections(), db.allEntries()]);
-
-  const shelf = collections.map((col) => {
-    const inside = entries.filter((e) => (e.collections || []).includes(col.id)).sort(byNewest);
-    return { col, inside, photo: inside.flatMap(entryPhotos)[0], latest: inside[0]?.date || '' };
-  }).sort((a, b) => b.latest.localeCompare(a.latest) || a.col.createdAt - b.col.createdAt);
-
-  const create = async () => {
-    const name = await ask({ title: 'New collection', input: '', placeholder: 'e.g. Summer 2026', ok: 'Create' });
-    if (!name) return;
-    await db.saveCollection({ id: uid(), name, createdAt: Date.now() });
-    renderCollections(root, nav);
-  };
-
-  fill(root, 
-    bar(nav),
-    screen(
-      head({ title: c.title, lede: c.sub, action: textLink('New', create) }),
-      shelf.some((x) => x.inside.length)
-        ? h('div', { class: 'shelf' }, shelf.filter((x) => x.inside.length).map(({ col, inside, photo }, i) => h('button', {
-          class: `shelf-item ${i === 0 && inside.length ? 'lead' : ''}`,
-          onclick: () => nav.go(`collection/${col.id}`),
-        },
-        h('span', { class: `shelf-cover ${photo ? '' : 'no-photo'}` },
-          photo ? photoImg(photo.photoId, i === 0 ? 'full' : 'thumb') : h('span', { class: 'shelf-initial', 'aria-hidden': 'true' }, col.name.trim().charAt(0).toUpperCase())),
-        h('span', { class: 'shelf-name' }, col.name),
-        h('span', { class: 'eyebrow shelf-count' }, plural(inside.length, 'page', 'pages')),
-        )))
-        : h('p', { class: 'empty-note' }, 'Add a page to a collection from the bottom of any page while writing.'),
-      // Collections without pages yet: a quiet list instead of empty boxes.
-      shelf.some((x) => !x.inside.length) ? h('section', { class: 'section' },
-        h('div', { class: 'section-head' }, h('h2', { class: 'eyebrow' }, 'Not started yet')),
-        h('ul', { class: 'plain-list flush' }, shelf.filter((x) => !x.inside.length).map(({ col }) => h('li', {},
-          h('button', { class: 'plain-item', onclick: () => nav.go(`collection/${col.id}`) },
-            h('span', { class: 'plain-serif' }, col.name), icon('chevron'))))),
-      ) : null,
-    ),
-  );
-}
+// ================= ONE COLLECTION =================
 
 export async function renderCollection(root, nav, id) {
-  const col = (await db.allCollections()).find((c) => c.id === id);
+  const [allNotes, collections] = await Promise.all([db.allEntries(), db.allCollections()]);
+  const col = collections.find((c) => c.id === id);
   if (!col) { nav.back(); return; }
-  const entries = (await db.allEntries()).filter((e) => (e.collections || []).includes(id));
+  const notes = allNotes.filter((n) => (n.collections || []).includes(id)).sort((a, b) => b.createdAt - a.createdAt);
+  const photos = notes.flatMap((n) => (n.photos || []).map((p) => ({ ...p, note: n, when: p.date || iso(n.createdAt) })));
+  const redraw = () => renderCollection(root, nav, id);
+  let deleted = false;
 
-  const rename = async () => {
-    const name = await ask({ title: 'Rename collection', input: col.name, ok: 'Save' });
-    if (!name) return;
-    col.name = name;
-    await db.saveCollection(col);
-    renderCollection(root, nav, id);
-  };
-  const remove = async () => {
-    const ok = await ask({ title: `Delete “${col.name}”?`, message: 'The pages stay in your journal. Only the collection is removed.', ok: 'Delete', danger: true });
-    if (!ok) return;
-    const all = await db.allEntries();
-    await db.saveEntries(all.filter((e) => (e.collections || []).includes(id)).map((e) => ({ ...e, collections: e.collections.filter((x) => x !== id) })));
-    await db.deleteCollection(id);
-    toast('Collection deleted');
-    nav.back();
-  };
+  const edit = () => sheet('Collection', (close) => {
+    const name = h('input', { class: 'sheet-input serif', type: 'text', value: col.name, maxlength: 60, 'aria-label': 'Name', placeholder: 'Name' });
+    const desc = h('textarea', { class: 'sheet-input', rows: 3, value: col.description || '', maxlength: 400, 'aria-label': 'Description', placeholder: 'A few words about what this holds (optional)' });
+    const save = async () => {
+      col.name = name.value.trim() || col.name;
+      col.description = desc.value.trim();
+      await db.saveCollection(col);
+    };
+    name.addEventListener('change', save);
+    desc.addEventListener('change', save);
 
-  fill(root, 
-    bar(nav, { actions: [h('button', { class: 'icon-btn', 'aria-label': 'Rename collection', onclick: rename }, icon('edit'))] }),
+    const covers = h('div', { class: 'cover-choices' });
+    const drawCovers = () => fill(covers,
+      h('button', { class: `cover-choice none ${col.coverPhotoId ? '' : 'on'}`, onclick: async () => { col.coverPhotoId = null; await db.saveCollection(col); drawCovers(); } }, 'None'),
+      photos.map((p) => h('button', {
+        class: `cover-choice ${col.coverPhotoId === p.photoId ? 'on' : ''}`, 'aria-label': p.caption || 'Use this photograph',
+        onclick: async () => { col.coverPhotoId = p.photoId; await db.saveCollection(col); drawCovers(); },
+      }, photoImg(p.photoId, 'thumb'))),
+    );
+    drawCovers();
+
+    return [
+      h('h4', { class: 'eyebrow sheet-label' }, 'Name'), name,
+      h('h4', { class: 'eyebrow sheet-label' }, 'Description'), desc,
+      h('h4', { class: 'eyebrow sheet-label' }, 'Cover photograph'),
+      photos.length ? covers : h('p', { class: 'set-note' }, 'Add photographs to notes in this collection, then choose one as its cover.'),
+      h('button', {
+        class: 'danger-btn',
+        onclick: async () => {
+          if (!await ask({ title: `Delete “${col.name}”?`, message: 'The notes stay in your journal. Only the collection is removed.', ok: 'Delete', danger: true })) return;
+          deleted = true;
+          close();
+          const touched = allNotes.filter((n) => (n.collections || []).includes(id)).map((n) => ({ ...n, collections: n.collections.filter((x) => x !== id) }));
+          await db.saveEntries(touched);
+          await db.deleteCollection(id);
+          toast('Collection deleted');
+          nav.back();
+        },
+      }, 'Delete collection'),
+    ];
+  }, async () => {
+    // the sheet was closed: keep what was typed and show it
+    if (deleted) return;
+    const [name, desc] = document.querySelectorAll('.sheet .sheet-input');
+    if (name) { col.name = name.value.trim() || col.name; col.description = desc.value.trim(); await db.saveCollection(col); }
+    redraw();
+  });
+
+  fill(root,
+    bar(nav, { actions: [h('button', { class: 'icon-btn', 'aria-label': 'Edit collection', onclick: edit }, icon('more'))] }),
     screen(
-      head({
-        eyebrow: 'Collection',
-        title: col.name,
-        lede: entries.length ? plural(entries.length, 'page', 'pages') : null,
-        action: textLink('New', () => nav.go(`write?kind=memory&collection=${id}`)),
-      }),
-      entries.length ? monthGroups(entries, nav) : emptyBlock('This collection is still empty.', 'Write a page for it', () => nav.go(`write?kind=memory&collection=${id}`)),
-      h('button', { class: 'danger-btn', onclick: remove }, 'Delete collection'),
+      h('header', { class: 'head collection-head' },
+        h('div', { class: 'eyebrow' }, [plural(notes.length, 'note', 'notes'), photos.length ? plural(photos.length, 'photograph', 'photographs') : null].filter(Boolean).join(' · ')),
+        h('h1', { class: 'display' }, col.name),
+        col.description ? h('p', { class: 'lede' }, col.description) : null,
+      ),
+      col.coverPhotoId ? h('div', { class: 'collection-cover' }, photoImg(col.coverPhotoId, 'full')) : null,
+      h('button', { class: 'new-note slim', onclick: () => nav.compose(id) }, h('span', { class: 'new-note-text' }, 'New note here'), icon('compose')),
+      notes.length
+        ? h('section', { class: 'section tight' }, noteList(notes, nav, 'createdAt'))
+        : h('p', { class: 'empty-note' }, 'Nothing here yet. Write a note here, or add an existing note from its “…” menu.'),
+      photos.length ? h('section', { class: 'section' },
+        h('div', { class: 'section-head' }, h('h2', { class: 'eyebrow' }, 'Photographs')),
+        h('div', { class: 'gallery-grid' }, photos.map((p, i) => h('button', {
+          class: 'gallery-item', 'aria-label': p.caption || 'Photograph',
+          onclick: () => openLightbox(photos, i, nav, collections),
+        }, photoImg(p.photoId, 'thumb')))),
+      ) : null,
     ),
   );
 }
 
-// ================= READER =================
+// ================= LIGHTBOX (one photograph, with where it belongs) =================
 
-export async function renderReader(root, nav, id, readingList) {
-  const all = await db.allEntries();
-  const byId = new Map(all.map((e) => [e.id, e]));
-  const order = (readingList && readingList.includes(id))
-    ? readingList.filter((x) => byId.has(x))
-    : [...all].sort(byNewest).reverse().map((e) => e.id);
-  let index = order.indexOf(id);
-  if (index < 0) { nav.back(); return; }
-  const collections = new Map((await db.allCollections()).map((c) => [c.id, c]));
-
-  const page = h('article', { class: 'reader-page' });
-  const favBtn = h('button', { class: 'icon-btn', 'aria-label': 'Favourite' }, icon('star'));
-  const count = h('span', { class: 'pager-count' });
-  const prevBtn = h('button', { class: 'pager-btn', onclick: () => turn(-1) }, icon('left'), 'Earlier');
-  const nextBtn = h('button', { class: 'pager-btn', onclick: () => turn(1) }, 'Later', icon('right'));
-
-  favBtn.addEventListener('click', async () => {
-    const e = byId.get(order[index]);
-    e.favorite = !e.favorite;
-    e.updatedAt = Date.now();
-    await db.saveEntry(e);
-    favBtn.classList.toggle('on', e.favorite);
-    favBtn.setAttribute('aria-pressed', String(e.favorite));
-    toast(e.favorite ? 'Added to favourites' : 'Removed from favourites');
-  });
-
-  function drawPage() {
-    const e = byId.get(order[index]);
-    nav.replace(`read/${e.id}`);
-    favBtn.classList.toggle('on', !!e.favorite);
-    favBtn.setAttribute('aria-pressed', String(!!e.favorite));
-    count.textContent = `${index + 1} of ${order.length}`;
-    prevBtn.disabled = index === 0;
-    nextBtn.disabled = index === order.length - 1;
-
-    const mood = moodById(e.mood);
-    const photos = entryPhotos(e);
-    let photoCount = 0;
-    const cols = (e.collections || []).map((cid) => collections.get(cid)).filter(Boolean);
-
-    page.className = `reader-page kind-${e.kind}`;
-    fill(page,
-      h('div', { class: 'reader-meta' },
-        h('span', { class: 'eyebrow' }, fmt.long(e.date)),
-        e.time ? h('span', { class: 'eyebrow muted' }, e.time) : null,
-      ),
-      e.kind !== 'entry' ? h('div', { class: 'reader-kind' }, KINDS[e.kind]?.one) : null,
-      h('h1', { class: 'title-1 reader-title' }, displayTitle(e)),
-      mood ? h('p', { class: 'reader-mood' }, `Feeling ${mood.label.toLowerCase()}`) : null,
-      h('hr', { class: 'short-rule' }),
-      (e.blocks || []).map((b) => {
-        if (b.type === 'photo') {
-          const i = photos.indexOf(b);
-          const caption = (b.caption || (b.date && b.date !== e.date)) ? h('figcaption', {},
-            b.caption ? h('span', { class: 'caption' }, b.caption) : null,
-            b.date && b.date !== e.date ? h('span', { class: 'caption-date' }, fmt.medium(b.date)) : null,
-          ) : null;
-          const { figure, frame } = printFigure(b.photoId, { alt: photoCount++ % 2 === 1, caption });
-          frame.setAttribute('role', 'button');
-          frame.setAttribute('aria-label', 'View photo');
-          frame.addEventListener('click', () => openLightbox(photos.map((p) => ({ ...p, entry: e })), i, nav));
-          return figure;
-        }
-        return b.text ? h('p', { class: 'reader-text' }, b.text) : null;
-      }),
-      (cols.length || e.milestone) ? h('footer', { class: 'reader-foot' },
-        cols.length ? h('p', {}, 'Kept in ', cols.flatMap((c, i) => [
-          i ? (i === cols.length - 1 ? ' and ' : ', ') : null,
-          h('button', { onclick: () => nav.go(`collection/${c.id}`) }, c.name),
-        ]), '.') : null,
-        e.milestone ? h('p', {}, 'Marked as an important date.') : null,
-      ) : null,
-    );
-  }
-
-  let turning = false;
-  function turn(dir) {
-    const next = index + dir;
-    if (turning || next < 0 || next >= order.length) return;
-    turning = true;
-    page.classList.add(dir > 0 ? 'leaving-next' : 'leaving-prev');
-    setTimeout(() => {
-      index = next;
-      drawPage();
-      window.scrollTo(0, 0);
-      page.classList.add(dir > 0 ? 'arriving-next' : 'arriving-prev');
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        page.classList.remove('arriving-next', 'arriving-prev');
-        turning = false;
-      }));
-    }, 180);
-  }
-
-  // Swipe left/right to turn the page.
-  let sx = 0; let sy = 0;
-  page.addEventListener('touchstart', (ev) => { sx = ev.touches[0].clientX; sy = ev.touches[0].clientY; }, { passive: true });
-  page.addEventListener('touchend', (ev) => {
-    const dx = ev.changedTouches[0].clientX - sx;
-    const dy = ev.changedTouches[0].clientY - sy;
-    if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.6) turn(dx < 0 ? 1 : -1);
-  });
-
-  fill(root, 
-    bar(nav, {
-      actions: [
-        favBtn,
-        h('button', { class: 'icon-btn', 'aria-label': 'Edit page', onclick: () => nav.go(`edit/${order[index]}`) }, icon('edit')),
-      ],
-    }),
-    h('main', { class: 'screen reader enter' }, page),
-    order.length > 1 ? h('nav', { class: 'pager', 'aria-label': 'Turn pages' }, prevBtn, count, nextBtn) : null,
-  );
-  drawPage();
-}
-
-// ================= LIGHTBOX =================
-
-export function openLightbox(items, startIndex, nav) {
+export function openLightbox(items, startIndex, nav, collections = []) {
   let index = startIndex;
   const img = h('img', { class: 'lightbox-img', alt: '' });
   const foot = h('div', { class: 'lightbox-foot' });
   const count = h('span', { class: 'lightbox-count' });
+  const colById = new Map(collections.map((c) => [c.id, c]));
 
   async function draw() {
     const item = items[index];
     img.src = (await photoURL(item.photoId, 'full')) || '';
     img.alt = item.caption || '';
     count.textContent = items.length > 1 ? `${index + 1} of ${items.length}` : '';
+    const cols = (item.note?.collections || []).map((id) => colById.get(id)).filter(Boolean);
     fill(foot,
       item.caption ? h('p', { class: 'lightbox-caption' }, item.caption) : null,
       h('div', { class: 'lightbox-meta' },
-        h('span', { class: 'caption-date' }, fmt.medium(item.date || item.entry.date)),
-        h('button', { onclick: () => { close(); nav.read(item.entry.id); } }, `${displayTitle(item.entry)} →`),
+        h('span', { class: 'caption-date' }, fmt.medium(item.date || item.when || iso(item.note.createdAt))),
+        item.note ? h('button', { onclick: () => { close(); nav.open(item.note.id); } }, `${noteTitle(item.note)} →`) : null,
       ),
+      cols.length ? h('p', { class: 'lightbox-cols' }, 'In ', cols.flatMap((c, i) => [
+        i ? ', ' : null,
+        h('button', { onclick: () => { close(); nav.go(`collection/${c.id}`); } }, c.name),
+      ])) : null,
     );
   }
 
@@ -802,51 +433,95 @@ export function openLightbox(items, startIndex, nav) {
   requestAnimationFrame(() => overlay.classList.add('show'));
 }
 
+// Used by the editor: open one of a note's photographs.
+export async function openNotePhoto(note, photoId, nav) {
+  const collections = await db.allCollections();
+  const items = (note.photos || []).map((p) => ({ ...p, note }));
+  const index = Math.max(0, items.findIndex((p) => p.photoId === photoId));
+  if (items.length) openLightbox(items, index, nav, collections);
+}
+
 // ================= SEARCH =================
 
+let lastQuery = '';
+let lastMonth = '';
+
 export async function renderSearch(root, nav) {
-  const [entries, collections] = await Promise.all([db.allEntries(), db.allCollections()]);
+  const [notes, collections] = await Promise.all([db.allEntries(), db.allCollections()]);
   const colNames = new Map(collections.map((c) => [c.id, c.name]));
 
-  // Everything you could search for, in one lowercase string per page.
-  const haystack = new Map(entries.map((e) => [e.id, [
-    e.title, entryText(e),
-    ...entryPhotos(e).map((p) => p.caption),
-    fmt.long(e.date), fmt.dots(e.date), e.date, fmt.dots(e.date).slice(0, 5),
-    KINDS[e.kind]?.label, moodById(e.mood)?.label,
-    ...(e.collections || []).map((id) => colNames.get(id)),
+  // Everything searchable about a note, in one lowercase string.
+  const haystack = new Map(notes.map((n) => [n.id, [
+    n.title, n.text,
+    ...(n.photos || []).map((p) => p.caption),
+    ...(n.collections || []).map((id) => colNames.get(id)),
+    fmt.long(iso(n.createdAt)), fmt.dots(iso(n.createdAt)), fmt.dots(iso(n.createdAt)).slice(0, 5),
   ].filter(Boolean).join(' \n ').toLowerCase()]));
 
-  const input = h('input', { class: 'search-field', type: 'search', placeholder: 'Search your pages', autocomplete: 'off', enterkeyhint: 'search', 'aria-label': 'Search' });
+  const months = [...new Set(notes.map((n) => iso(n.createdAt).slice(0, 7)))].sort().reverse();
+  const input = h('input', { class: 'search-field', type: 'search', placeholder: 'Search', autocomplete: 'off', enterkeyhint: 'search', 'aria-label': 'Search', value: lastQuery });
+  const monthSelect = h('select', { class: 'search-month', 'aria-label': 'Filter by month' },
+    h('option', { value: '' }, 'Any time'),
+    months.map((m) => h('option', { value: m, selected: m === lastMonth }, fmt.monthYear(`${m}-01`))),
+  );
   const results = h('div', {});
 
   const run = () => {
+    lastQuery = input.value;
+    lastMonth = monthSelect.value;
     const words = input.value.toLowerCase().trim().split(/\s+/).filter(Boolean);
-    nav.replace(words.length ? `search?q=${encodeURIComponent(input.value)}` : 'search');
-    if (!words.length) {
-      fill(results, h('p', { class: 'search-hint' }, 'Words, titles, captions, moods, collections, or a date like 28.09'));
+    const inMonth = (n) => !lastMonth || iso(n.createdAt).startsWith(lastMonth);
+    if (!words.length && !lastMonth) {
+      fill(results, h('p', { class: 'search-hint' }, 'Search titles, the words inside your notes, collections and photo captions. A date like 28.09 works too.'));
       return;
     }
-    const found = entries.filter((e) => words.every((w) => haystack.get(e.id).includes(w)));
-    fill(results, 
-      h('p', { class: 'search-hint' }, found.length ? plural(found.length, 'page', 'pages') : 'Nothing found.'),
-      ...monthGroups(found, nav),
+    const match = (text) => words.every((w) => (text || '').toLowerCase().includes(w));
+    const foundNotes = notes.filter((n) => inMonth(n) && words.every((w) => haystack.get(n.id).includes(w))).sort((a, b) => b.createdAt - a.createdAt);
+    const foundCols = words.length ? collections.filter((c) => match(`${c.name} ${c.description || ''}`)) : [];
+    const foundPhotos = words.length
+      ? notes.filter(inMonth).flatMap((n) => (n.photos || []).filter((p) => p.caption && match(p.caption)).map((p) => ({ ...p, note: n })))
+      : [];
+
+    fill(results,
+      foundCols.length ? h('section', { class: 'section tight' },
+        h('div', { class: 'section-head' }, h('h2', { class: 'eyebrow' }, 'Collections')),
+        h('ul', { class: 'words small' }, foundCols.map((c) => wordEntrance(c, notes, nav))),
+      ) : null,
+      foundNotes.length ? h('section', { class: 'section tight' },
+        h('div', { class: 'section-head' }, h('h2', { class: 'eyebrow' }, plural(foundNotes.length, 'note', 'notes'))),
+        noteList(foundNotes, nav, 'createdAt'),
+      ) : null,
+      foundPhotos.length ? h('section', { class: 'section tight' },
+        h('div', { class: 'section-head' }, h('h2', { class: 'eyebrow' }, 'Photographs')),
+        h('ul', { class: 'rows' }, foundPhotos.map((p, i) => h('li', {},
+          h('button', { class: 'note-row', onclick: () => openLightbox(foundPhotos, i, nav, collections) },
+            h('span', { class: 'note-row-body' },
+              h('span', { class: 'note-row-title caption' }, p.caption),
+              h('span', { class: 'note-row-sub' }, h('span', { class: 'note-row-text' }, `In “${noteTitle(p.note)}”`)),
+            ),
+            h('span', { class: 'row-thumb' }, photoImg(p.photoId, 'thumb')),
+          )))),
+      ) : null,
+      !foundCols.length && !foundNotes.length && !foundPhotos.length ? h('p', { class: 'search-hint' }, 'Nothing found.') : null,
     );
   };
   input.addEventListener('input', run);
-  input.value = new URLSearchParams(location.hash.split('?')[1] || '').get('q') || '';
+  monthSelect.addEventListener('change', run);
   run();
 
-  fill(root, bar(nav, { title: 'Search' }), screen(input, results));
-  if (!input.value) setTimeout(() => input.focus(), 60);
+  fill(root, screen(
+    head({ title: 'Search', tab: true }),
+    input,
+    months.length ? h('label', { class: 'search-filter' }, h('span', { class: 'eyebrow' }, 'When'), monthSelect) : null,
+    results,
+  ));
 }
 
 // ================= SETTINGS =================
 
 export async function renderSettings(root, nav) {
-  const [bookTitle, letterTo, writingFont, lastBackup, entries, photoIds, canFaceId, hasFaceId] = await Promise.all([
+  const [bookTitle, writingFont, lastBackup, notes, photoIds, canFaceId, hasFaceId] = await Promise.all([
     db.getSetting('bookTitle', 'Little Memories'),
-    db.getSetting('letterTo', ''),
     db.getSetting('writingFont', 'clean'),
     db.getSetting('lastBackup'),
     db.allEntries(),
@@ -856,14 +531,6 @@ export async function renderSettings(root, nav) {
   ]);
   let storage = null;
   try { storage = await navigator.storage?.estimate(); } catch { /* not available */ }
-
-  const textSetting = (label, key, value, placeholder) => h('label', { class: 'set-row' },
-    h('span', {}, label),
-    h('input', {
-      class: 'set-input', type: 'text', value: value || '', placeholder, maxlength: 40,
-      onchange: async (e) => { await db.setSetting(key, e.target.value.trim()); toast('Saved'); },
-    }),
-  );
 
   const fontSelect = h('select', {
     class: 'set-select',
@@ -882,10 +549,7 @@ export async function renderSettings(root, nav) {
       onchange: async (e) => {
         if (e.target.checked) {
           try { await enableFaceId(bookTitle); toast('Face ID is on'); } catch { e.target.checked = false; toast('Face ID couldn’t be turned on'); }
-        } else {
-          await disableFaceId();
-          toast('Face ID is off');
-        }
+        } else { await disableFaceId(); toast('Face ID is off'); }
       },
     }),
   );
@@ -898,7 +562,7 @@ export async function renderSettings(root, nav) {
     try {
       toast('Reading backup…');
       const { pages, total } = await importBackup(file);
-      toast(`Restored ${pages} of ${total} pages`);
+      toast(`Restored ${pages} of ${total} notes`);
       renderSettings(root, nav);
     } catch (err) {
       ask({ title: 'Couldn’t restore', message: err.message || 'Something went wrong.', ok: 'OK', cancel: 'Close' });
@@ -929,19 +593,19 @@ export async function renderSettings(root, nav) {
     },
   }, h('span', {}, 'Export backup'), icon('chevron'));
 
-  const group = (title, ...rows) => h('section', { class: 'set-group' },
-    h('h2', { class: 'eyebrow' }, title),
-    h('div', { class: 'set-list' }, rows),
-  );
+  const group = (title, ...rows) => h('section', { class: 'set-group' }, h('h2', { class: 'eyebrow' }, title), h('div', { class: 'set-list' }, rows));
   const info = (label, value) => h('div', { class: 'set-row static' }, h('span', {}, label), h('span', { class: 'set-value' }, value));
 
-  fill(root, 
+  fill(root,
     bar(nav),
     screen(
       head({ title: 'Settings' }),
       group('Your journal',
-        textSetting('Title', 'bookTitle', bookTitle, 'Little Memories'),
-        textSetting('Letters to', 'letterTo', letterTo, 'A name'),
+        h('label', { class: 'set-row' }, h('span', {}, 'Title'),
+          h('input', {
+            class: 'set-input', type: 'text', value: bookTitle || '', placeholder: 'Little Memories', maxlength: 40,
+            onchange: async (e) => { await db.setSetting('bookTitle', e.target.value.trim()); toast('Saved'); },
+          })),
         h('label', { class: 'set-row' }, h('span', {}, 'Writing font'), fontSelect),
       ),
       group('Privacy',
@@ -955,12 +619,12 @@ export async function renderSettings(root, nav) {
       group('Backup',
         exportBtn,
         h('button', { class: 'set-row', onclick: () => pickFiles(importInput) }, h('span', {}, 'Restore from a backup'), icon('chevron')),
-        info('Last backup', lastBackup ? fmt.medium(todayISO(new Date(lastBackup))) : 'Never'),
+        info('Last backup', lastBackup ? fmt.medium(iso(lastBackup)) : 'Never'),
       ),
       importInput,
-      h('p', { class: 'set-note' }, 'Everything is stored only on this iPhone, never on the internet. If you remove the app from your Home Screen or lose your phone, the journal is gone with it. Export a backup every week or two and keep it in iCloud Drive.'),
+      h('p', { class: 'set-note' }, 'Everything is stored only on this iPhone, never on the internet. If you remove the app from your Home Screen or lose your phone, the journal is gone with it. Export a backup every week or two and keep it in iCloud Drive. The backup is a zip file with all your notes and original photographs.'),
       group('About',
-        info('Pages', entries.length),
+        info('Notes', notes.length),
         info('Photographs', photoIds.length),
         storage ? info('Space used', formatBytes(storage.usage)) : null,
         info('Version', APP_VERSION),

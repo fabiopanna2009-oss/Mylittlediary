@@ -1,22 +1,23 @@
 # Little Memories
 
-A private journal for iPhone, designed like an independent editorial journal crossed with an old personal diary: warm ivory paper, cocoa ink, walnut brown, fine hairlines, and photographs that are given room to breathe.
+The simplicity of Apple Notes with the feeling of opening a personal journal. Writing comes first; collections, dates and photographs give it meaning.
 
-**Your diary lives only on your phone.** This repository contains just the empty app (the code). None of your entries, photos or names are ever stored here or sent anywhere.
+**Your journal lives only on your phone.** This repository contains just the empty app (the code). None of your notes, photos or names are ever stored here or sent anywhere.
 
 ## What it can do
 
-- **Write freely.** Unlimited pages per day, each with a title, date, time and as much text as you want. It saves automatically while you write.
-- **Photographs in your pages.** Add pictures exactly where your cursor is, between paragraphs, with an optional caption and date. They are shown as they are, like prints with a thin white border; upright photos are placed slightly narrower, alternating left and right.
-- **Moods and prompts.** An optional mood for each page, and gentle writing prompts that are only there if you want them.
-- **Chapters:** Today's thoughts, Journal, Letters (that you may never send), Memories, Little details, Timeline, Collections, Gallery and Favourites.
-- **Four places at the bottom:** Today (a quiet home with a featured memory and recent pages), Journal (all pages, or a calendar), Photos, and Contents (the chapters, search and settings).
-- **Read like a book.** Swipe or tap Earlier / Later to turn the pages.
-- **Search** by words, titles, dates (e.g. `28.09`), moods or collections.
+- **Write immediately.** Tap *New note* (or the pen in the bottom bar) and start typing. No templates, no forms. Notes save by themselves.
+- **Simple formatting.** Headings, bold, lists and checklists from a small toolbar above the keyboard.
+- **Photographs inside notes.** Placed where your cursor is, between paragraphs, with an optional caption and date. Your original photos are kept untouched: no filters, no cropping.
+- **Pin** important notes, **sort** by last edited or date created, **delete** from the note's "…" menu.
+- **Memories.** Collections are meaningful words you tap, like *The little things* or *Unspoken words*. Create, rename, describe, reorder and delete them, and choose a cover photograph. A note can be in several collections, or in none.
+- **Photographs.** One gallery of every picture; open one to see its note and collections.
+- **Search** titles, the words inside notes, collection names and photo captions, with an optional month filter.
 - **Private.** Locked with a PIN or Face ID, and it locks every time you leave the app.
-- **Backups.** Export everything (pages + original photos) as one `.zip` file and save it in iCloud Drive. You can restore it on any phone.
-- **Warm dark mode** that follows your iPhone setting.
-- **Works offline.**
+- **Backups.** Export everything (notes + original photos) as one `.zip` file and restore it on any phone.
+- **Warm dark mode** and **offline** use.
+
+Four places at the bottom: **Home**, **Notes**, **Memories**, **Search**, with *new note* always in the middle.
 
 ## Putting it on your iPhone
 
@@ -61,19 +62,20 @@ python3 -m http.server 8000
 
 | File | What's in it |
 | --- | --- |
-| `index.html` | The page skeleton and the lock screen |
+| `index.html` | The page skeleton, the bottom bar and the lock screen |
 | `css/styles.css` | The whole design system: colours at the top (`--walnut`, `--caramel`, `--gold`, `--paper`, …), then type, layout and every screen |
-| `js/content.js` | **The easiest place to start:** moods, writing prompts, starting collections |
+| `js/content.js` | **The easiest place to start:** the collections a new journal begins with |
 | `js/app.js` | Starts the app and decides which screen to show |
-| `js/views.js` | All the screens: Today, Journal, calendar, Photos, Contents, chapters, reader, search, settings |
-| `js/editor.js` | Writing a page, including gluing photos between paragraphs |
+| `js/views.js` | The screens: Home, Notes, Memories, a collection, Photographs, Search, Settings |
+| `js/editor.js` | Writing a note: formatting, checklists, photographs, autosave |
+| `js/notes.js` | What a note is, cleaning its HTML, and upgrading notes from older versions |
 | `js/db.js` | Saving on the phone with IndexedDB (think of it as a small database with tables) |
 | `js/photos.js` | Saving photos and making small preview copies |
 | `js/lock.js` | PIN and Face ID |
 | `js/backup.js` | Export and import of the `.zip` backup |
 | `sw.js` | The service worker that makes the app work offline |
 
-After you change something, bump the version in `sw.js` (e.g. `little-memories-v2` → `v3`) so your phone picks up the new version. Close and reopen the app once or twice to see it.
+After you change something, bump the version in `sw.js` (e.g. `little-memories-v3` → `v4`) so your phone picks up the new version. Close and reopen the app once or twice to see it.
 
 ## Fonts
 

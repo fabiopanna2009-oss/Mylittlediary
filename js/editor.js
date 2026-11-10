@@ -1,417 +1,386 @@
-// editor.js — writing a page.
+// editor.js — writing a note.
 //
-// A page is a list of "blocks": text, photo, text, photo, text…
-// When you add a photo, the text block you are in is split at your cursor and the photo goes in between,
-// like gluing a picture into the middle of a page.
-// Everything saves automatically while you write.
+// The note body is one editable area (like Apple Notes). You just write.
+// A small toolbar above the keyboard offers: heading, bold, list, checklist, photograph.
+// Photographs are placed where your cursor is, between paragraphs, with an optional caption and date.
+// Everything saves by itself a moment after you stop typing.
 
 import { db } from './db.js';
-import { h, fill, icon, uid, todayISO, nowTime, debounce, isEntryEmpty, entryText, entryPhotos, toast, ask, fmt, pickFiles } from './util.js';
-import { KINDS, MOODS, PROMPTS, LETTER_PROMPTS, DETAIL_PROMPTS, randomFrom } from './content.js';
-import { addPhotoFromFile, printFigure, cleanUpUnusedPhotos } from './photos.js';
+import { h, icon, debounce, toast, ask, sheet, fmt, todayISO, pickFiles, uid } from './util.js';
+import { derive, newNote, isNoteEmpty } from './notes.js';
+import { addPhotoFromFile, photoImg, cleanUpUnusedPhotos } from './photos.js';
 
-let current = null;        // the page being edited
-let saveSoon = null;       // debounced save
-let lastFocus = null;      // { index, caret } — where the cursor was last
-let startText = '';        // e.g. "Dear …," that a new letter starts with
+let current = null;       // the note being edited (+ _saved: is it in the database yet?)
+let dirty = false;        // has anything changed since the last save?
+let bodyEl = null;        // the editable area
+let titleEl = null;
+let saveSoon = null;
+let savedRange = null;    // where the cursor was before the photo picker opened
+let cleanup = () => {};
 
-// A page counts as empty if nothing was written (a letter with only "Dear …," is empty too).
-function isBlank(entry) {
-  if (isEntryEmpty(entry)) return true;
-  return !!startText && !entry.title?.trim() && entryPhotos(entry).length === 0 && entryText(entry) === startText.trim();
-}
-
-export function newEntry(kind = 'entry', extra = {}) {
-  const now = Date.now();
-  return {
-    id: uid(),
-    kind,
-    title: '',
-    date: todayISO(),
-    time: nowTime(),
-    mood: null,
-    blocks: [{ type: 'text', text: '' }],
-    collections: [],
-    favorite: false,
-    milestone: false,
-    createdAt: now,
-    updatedAt: now,
-    ...extra,
-  };
-}
-
-// Save now (if the page has anything in it).
-export async function saveCurrent() {
-  if (!current) return;
-  saveSoon?.cancel();
-  if (isBlank(current)) {
-    if (current._saved) {
-      await db.deleteEntry(current.id);
-      current._saved = false;
-    }
-    return;
-  }
-  current.updatedAt = Date.now();
-  const { _saved, ...toStore } = current;
-  await db.saveEntry(toStore);
-  current._saved = true;
-  setStatus('Saved');
-}
-
-// Called when leaving the editor.
-export async function closeEditor() {
-  if (!current) return;
-  await saveCurrent();
-  current = null;
-  await cleanUpUnusedPhotos();
-}
-
-function setStatus(text) {
-  const el = document.getElementById('save-status');
-  if (el) el.textContent = text;
-}
+const setStatus = (text) => { const el = document.getElementById('save-status'); if (el) el.textContent = text; };
 
 function changed() {
+  dirty = true;
   setStatus('Saving…');
+  bodyEl?.classList.toggle('empty', isBodyEmpty());
   saveSoon();
 }
 
-// Text areas grow with your text, like a page that never ends.
+const isBodyEmpty = () => !bodyEl.textContent.trim() && !bodyEl.querySelector('figure, li');
+
+// Save now. An empty note is never kept.
+export async function saveCurrent() {
+  if (!current || !bodyEl) return;
+  saveSoon?.cancel();
+  if (!dirty) return;
+  Object.assign(current, derive(bodyEl), { title: titleEl.value.replace(/\n/g, ' ').trim() });
+  if (isNoteEmpty(current)) {
+    if (current._saved) { await db.deleteEntry(current.id); current._saved = false; }
+    setStatus('');
+    return;
+  }
+  current.updatedAt = Date.now();
+  const { _saved, ...note } = current;
+  await db.saveEntry(note);
+  current._saved = true;
+  dirty = false;
+  setStatus('Saved');
+}
+
+export async function closeEditor() {
+  if (!current) return;
+  await saveCurrent();
+  cleanup();
+  current = null;
+  bodyEl = null;
+  await cleanUpUnusedPhotos();
+}
+
 function autoGrow(ta) {
   ta.style.height = 'auto';
-  ta.style.height = `${ta.scrollHeight + 2}px`;
+  ta.style.height = `${ta.scrollHeight}px`;
 }
 
-function placeholderFor(kind, index) {
-  if (index > 0) return 'Continue writing…';
-  if (kind === 'letter') return 'Dear …';
-  if (kind === 'detail') return 'Something small you remember…';
-  if (kind === 'thought') return 'What’s on your mind?';
-  if (kind === 'memory') return 'A moment you never want to forget…';
-  return 'Begin anywhere…';
+// ---------- photographs inside the text ----------
+// In the saved note a photo is just <figure data-photo="…">. While editing we fill it with
+// the picture, a caption field, a date and a Remove button.
+function dressFigure(fig, openPhoto) {
+  fig.contentEditable = 'false';
+  fig.className = 'print';
+  const img = photoImg(fig.dataset.photo, 'full');
+  img.addEventListener('load', () => { if (img.naturalHeight > img.naturalWidth * 1.08) fig.classList.add('portrait'); });
+  img.addEventListener('click', () => openPhoto({ ...current, ...derive(bodyEl) }, fig.dataset.photo));
+
+  const dateText = h('span', { class: 'caption-date' }, fig.dataset.date ? fmt.medium(fig.dataset.date) : 'Add a date');
+  fig.replaceChildren(
+    h('div', { class: 'print-frame' }, img),
+    h('figcaption', {},
+      h('input', {
+        class: 'caption-input', type: 'text', placeholder: 'Add a caption', value: fig.dataset.caption || '', maxlength: 200, 'aria-label': 'Caption',
+        oninput: (e) => { fig.dataset.caption = e.target.value; changed(); },
+      }),
+      h('div', { class: 'print-tools' },
+        h('label', { class: 'photo-date' }, dateText,
+          h('input', {
+            type: 'date', value: fig.dataset.date || '', 'aria-label': 'Date of the photograph',
+            oninput: (e) => { fig.dataset.date = e.target.value; dateText.textContent = e.target.value ? fmt.medium(e.target.value) : 'Add a date'; changed(); },
+          })),
+        h('button', {
+          class: 'remove',
+          onclick: async () => {
+            if (!await ask({ title: 'Remove this photograph?', message: 'It will be taken out of this note.', ok: 'Remove', danger: true })) return;
+            fig.remove();
+            ensureWritable();
+            changed();
+          },
+        }, 'Remove'),
+      ),
+    ),
+  );
 }
 
-export async function renderEditor(root, { id, kind, date, collection, milestone, prompt, onDone }) {
-  // ----- load or create the page -----
+// There must always be a line to type on at the very end.
+function ensureWritable() {
+  const last = bodyEl.lastElementChild;
+  if (!last || last.tagName === 'FIGURE') bodyEl.append(h('p', {}, h('br')));
+}
+
+// ---------- formatting ----------
+function closestInBody(selector) {
+  const sel = window.getSelection();
+  if (!sel.rangeCount) return null;
+  const node = sel.anchorNode?.nodeType === Node.ELEMENT_NODE ? sel.anchorNode : sel.anchorNode?.parentElement;
+  const found = node?.closest(selector);
+  return found && bodyEl.contains(found) ? found : null;
+}
+
+function run(command, value = null) {
+  bodyEl.focus();
+  document.execCommand(command, false, value);
+  changed();
+}
+
+// Browsers glue a new list onto a list right above it. If that list is of the other kind
+// (bullets vs. checklist), move the current line into its own list.
+function ownList(wantChecklist) {
+  const li = closestInBody('li');
+  const ul = li?.parentElement;
+  if (!ul) return;
+  if (ul.children.length > 1 && ul.classList.contains('checklist') !== wantChecklist) {
+    const fresh = document.createElement('ul');
+    const moving = [];
+    for (let n = li; n; n = n.nextElementSibling) moving.push(n);
+    ul.after(fresh);
+    fresh.append(...moving);
+    if (wantChecklist) fresh.className = 'checklist'; else moving.forEach((m) => m.removeAttribute('data-checked'));
+    const range = document.createRange();
+    range.selectNodeContents(li);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } else {
+    ul.classList.toggle('checklist', wantChecklist);
+    if (!wantChecklist) ul.querySelectorAll('li').forEach((x) => x.removeAttribute('data-checked'));
+  }
+}
+
+const format = {
+  heading() { run('formatBlock', closestInBody('h2') ? 'p' : 'h2'); },
+  bold() { run('bold'); },
+  list() {
+    const ul = closestInBody('ul');
+    if (ul?.classList.contains('checklist')) { ownList(false); changed(); return; } // checklist → bullets
+    run('insertUnorderedList');
+    if (!ul) { ownList(false); changed(); }
+  },
+  checklist() {
+    const ul = closestInBody('ul');
+    if (ul?.classList.contains('checklist')) { run('insertUnorderedList'); return; } // checklist → plain text
+    if (!ul) run('insertUnorderedList');
+    ownList(true);
+    changed();
+  },
+};
+
+// ---------- the screen ----------
+export async function renderEditor(root, { id, collection, onDone, openPhoto }) {
   if (id) {
     const stored = await db.getEntry(id);
     if (!stored) { onDone(); return; }
     current = { ...stored, _saved: true };
   } else {
-    current = newEntry(kind || 'entry', {
-      ...(date ? { date } : {}),
-      ...(collection ? { collections: [collection] } : {}),
-      ...(milestone ? { milestone: true } : {}),
-    });
-    if (current.kind === 'letter') {
-      const to = await db.getSetting('letterTo', '');
-      current.blocks[0].text = to ? `Dear ${to},\n\n` : '';
-    }
+    current = newNote(collection ? { collections: [collection] } : {});
   }
-  saveSoon = debounce(saveCurrent, 700);
-  lastFocus = null;
-  startText = id ? '' : entryText(current);
+  dirty = false;
+  saveSoon = debounce(saveCurrent, 600);
+  savedRange = null;
 
-  const collections = (await db.allCollections()).sort((a, b) => a.name.localeCompare(b.name));
-  const kindInfo = KINDS[current.kind] || KINDS.entry;
-  const blocksEl = h('div', { class: 'blocks' });
-
-  // ----- top bar -----
-  const favBtn = h('button', {
-    class: `icon-btn ${current.favorite ? 'on' : ''}`,
-    'aria-label': 'Favourite',
-    'aria-pressed': String(!!current.favorite),
-    onclick: () => {
-      current.favorite = !current.favorite;
-      favBtn.classList.toggle('on', current.favorite);
-      favBtn.setAttribute('aria-pressed', String(current.favorite));
-      toast(current.favorite ? 'Added to favourites' : 'Removed from favourites');
-      changed();
-    },
-  }, icon('star'));
-
-  const fileInput = h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
-  const addPhotos = () => pickFiles(fileInput); // opens the photo picker without locking the journal
-
-  const topbar = h('header', { class: 'bar' },
-    h('button', { class: 'icon-btn', 'aria-label': 'Done', onclick: () => onDone() }, icon('back')),
-    h('div', { class: 'bar-title' }, h('span', { class: 'save-state', id: 'save-status' }, current._saved ? 'Saved' : kindInfo.one)),
-    h('div', { class: 'bar-actions' },
-      h('button', { class: 'icon-btn', 'aria-label': 'Add a photograph', onclick: addPhotos }, icon('photo')),
-      favBtn,
-    ),
-  );
-
-  // ----- date & time -----
-  const dateLabel = h('span', { class: 'eyebrow' }, fmt.long(current.date));
-  const timeLabel = h('span', { class: 'eyebrow muted' }, current.time || 'Add time');
-  const meta = h('div', { class: 'ed-meta' },
-    h('label', { class: 'ed-date' }, dateLabel,
-      h('input', {
-        type: 'date', value: current.date, 'aria-label': 'Date',
-        oninput: (e) => { current.date = e.target.value || todayISO(); dateLabel.textContent = fmt.long(current.date); changed(); },
-      })),
-    h('label', { class: 'ed-time' }, timeLabel,
-      h('input', {
-        type: 'time', value: current.time || '', 'aria-label': 'Time',
-        oninput: (e) => { current.time = e.target.value; timeLabel.textContent = current.time || 'Add time'; changed(); },
-      })),
-  );
-
-  // ----- title -----
-  const titleInput = h('textarea', {
-    class: 'ed-title',
-    rows: 1,
-    placeholder: current.kind === 'letter' ? 'A title for this letter' : 'Title',
-    value: current.title,
-    'aria-label': 'Title',
-    oninput: (e) => { current.title = e.target.value.replace(/\n/g, ' '); autoGrow(e.target); changed(); },
-    onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); blocksEl.querySelector('textarea')?.focus(); } },
+  // ----- title and body -----
+  titleEl = h('textarea', {
+    class: 'note-title', rows: 1, placeholder: 'Title', value: current.title, 'aria-label': 'Title',
+    oninput: (e) => { autoGrow(e.target); changed(); },
+    onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); bodyEl.focus(); } },
   });
 
-  // ----- mood (optional) -----
-  const moodRow = h('div', { class: 'moods', role: 'group', 'aria-label': 'Mood' },
-    h('span', { class: 'moods-label' }, 'Feeling'),
-    MOODS.map((m) => h('button', {
-      class: 'mood',
-      'aria-pressed': String(current.mood === m.id),
-      onclick: (ev) => {
-        current.mood = current.mood === m.id ? null : m.id;
-        moodRow.querySelectorAll('.mood').forEach((b) => b.setAttribute('aria-pressed', 'false'));
-        if (current.mood) ev.currentTarget.setAttribute('aria-pressed', 'true');
-        changed();
-      },
-    }, m.label)),
-  );
+  bodyEl = h('div', {
+    class: 'note-body', contenteditable: 'true', role: 'textbox', 'aria-multiline': 'true', 'aria-label': 'Note',
+    'data-placeholder': 'Start writing…', spellcheck: true,
+  });
+  bodyEl.innerHTML = derive(current.html).html || '<p><br></p>'; // derive() cleans the HTML first
+  bodyEl.querySelectorAll('figure[data-photo]').forEach((f) => dressFigure(f, openPhoto));
+  ensureWritable();
+  bodyEl.classList.toggle('empty', isBodyEmpty());
 
-  // ----- a gentle prompt, only if wanted -----
-  const promptList = current.kind === 'letter' ? LETTER_PROMPTS : current.kind === 'detail' ? DETAIL_PROMPTS : PROMPTS;
-  let shownPrompt = prompt || null;
-  const promptBtn = h('button', { class: 'ed-prompt' });
-  function drawPrompt() {
-    if (!shownPrompt) {
-      promptBtn.className = 'ed-prompt';
-      promptBtn.replaceChildren('A prompt, if you’d like one');
-    } else {
-      promptBtn.className = 'ed-prompt shown';
-      promptBtn.replaceChildren(shownPrompt, h('span', { class: 'ed-prompt-again' }, 'Another prompt'));
-    }
-  }
-  promptBtn.addEventListener('click', () => { shownPrompt = randomFrom(promptList, shownPrompt); drawPrompt(); });
-  drawPrompt();
-
-  // ----- the page itself: text and photographs -----
-  function renderBlocks() {
-    let photoCount = 0;
-    blocksEl.replaceChildren(...current.blocks.map((block, index) => (block.type === 'photo'
-      ? photoBlock(block, index, photoCount++ % 2 === 1)
-      : textBlock(block, index))));
-    blocksEl.querySelectorAll('textarea').forEach(autoGrow);
-  }
-
-  function rememberCaret(ta, index) {
-    lastFocus = { index, caret: ta.selectionStart ?? ta.value.length };
-  }
-
-  function textBlock(block, index) {
-    return h('textarea', {
-      class: 'ed-text',
-      placeholder: placeholderFor(current.kind, index),
-      value: block.text,
-      'aria-label': 'Text',
-      oninput: (e) => { block.text = e.target.value; autoGrow(e.target); rememberCaret(e.target, index); changed(); },
-      onfocus: (e) => rememberCaret(e.target, index),
-      onkeyup: (e) => rememberCaret(e.target, index),
-      onclick: (e) => rememberCaret(e.target, index),
-      onblur: (e) => rememberCaret(e.target, index),
-    });
-  }
-
-  function photoBlock(block, index, alt) {
-    const caption = h('figcaption', {},
-      h('input', {
-        class: 'caption-input', type: 'text', placeholder: 'Add a caption', value: block.caption || '', maxlength: 200, 'aria-label': 'Caption',
-        oninput: (e) => { block.caption = e.target.value; changed(); },
-      }),
-      photoDate(block),
-    );
-    const { figure } = printFigure(block.photoId, { alt, caption });
-    figure.append(h('div', { class: 'print-tools' },
-      h('button', { onclick: () => movePhoto(index, -1), disabled: moveTarget(index, -1) < 0 }, 'Move up'),
-      h('button', { onclick: () => movePhoto(index, 1), disabled: moveTarget(index, 1) < 0 }, 'Move down'),
-      h('button', { class: 'remove', onclick: () => removePhoto(index) }, 'Remove'),
-    ));
-    return figure;
-  }
-
-  // The photo's date as quiet text; tapping it opens the iPhone date picker.
-  function photoDate(block) {
-    const label = h('span', { class: 'caption-date' }, block.date ? fmt.medium(block.date) : 'Add a date');
-    return h('label', { class: 'photo-date' }, label,
-      h('input', {
-        type: 'date', value: block.date || '', 'aria-label': 'Date of the photograph',
-        oninput: (e) => { block.date = e.target.value; label.textContent = block.date ? fmt.medium(block.date) : 'Add a date'; changed(); },
-      }));
-  }
-
-  // Joins text blocks that end up next to each other; keeps a text block at the start and end.
-  function mergeTexts() {
-    const merged = [];
-    for (const b of current.blocks) {
-      const prev = merged[merged.length - 1];
-      if (b.type === 'text' && prev?.type === 'text') {
-        prev.text = [prev.text.replace(/\s+$/, ''), b.text.replace(/^\s+/, '')].filter(Boolean).join('\n\n');
-      } else merged.push(b);
-    }
-    if (merged[merged.length - 1]?.type !== 'text') merged.push({ type: 'text', text: '' });
-    if (merged[0]?.type !== 'text') merged.unshift({ type: 'text', text: '' });
-    current.blocks = merged;
-  }
-
-  // Where a photo would move to: past the next paragraph or photo (empty text is skipped). -1 = can't move.
-  function moveTarget(index, dir) {
-    const blocks = current.blocks;
-    let target = index + dir;
-    while (target >= 0 && target < blocks.length && blocks[target].type === 'text' && blocks[target].text.trim() === '') target += dir;
-    return target >= 0 && target < blocks.length ? target : -1;
-  }
-
-  function movePhoto(index, dir) {
-    const blocks = current.blocks;
-    const target = moveTarget(index, dir);
-    if (target < 0) return;
-    [blocks[index], blocks[target]] = [blocks[target], blocks[index]];
-    mergeTexts();
-    renderBlocks();
+  bodyEl.addEventListener('input', (e) => {
+    if (!bodyEl.firstElementChild) bodyEl.innerHTML = '<p><br></p>';
+    // a new checklist line should start unticked
+    if (e.inputType === 'insertParagraph') closestInBody('li[data-checked]')?.removeAttribute('data-checked');
     changed();
-  }
-
-  async function removePhoto(index) {
-    const ok = await ask({ title: 'Remove this photograph?', message: 'It will be taken out of this page.', ok: 'Remove', danger: true });
-    if (!ok) return;
-    current.blocks.splice(index, 1);
-    mergeTexts();
-    renderBlocks();
+  });
+  // paste as plain text, so no foreign styling sneaks in
+  bodyEl.addEventListener('paste', (e) => {
+    e.preventDefault();
+    document.execCommand('insertText', false, (e.clipboardData || window.clipboardData).getData('text/plain'));
+  });
+  // tap the box of a checklist line to tick it
+  bodyEl.addEventListener('click', (e) => {
+    const li = e.target.closest?.('ul.checklist > li');
+    if (!li || e.clientX - li.getBoundingClientRect().left > 30) return;
+    e.preventDefault();
+    if (li.dataset.checked === 'true') li.removeAttribute('data-checked'); else li.dataset.checked = 'true';
     changed();
-  }
+  });
+  const rememberRange = () => {
+    const sel = window.getSelection();
+    if (sel.rangeCount && bodyEl?.contains(sel.anchorNode)) savedRange = sel.getRangeAt(0).cloneRange();
+  };
+  document.addEventListener('selectionchange', rememberRange);
 
+  // ----- adding photographs -----
+  const fileInput = h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
   fileInput.addEventListener('change', async () => {
     const files = [...fileInput.files];
     fileInput.value = '';
     if (!files.length) return;
-    setStatus('Adding photographs…');
-
-    const newBlocks = [];
+    setStatus('Adding…');
+    const figures = [];
     for (const file of files) {
       try {
-        const photoId = await addPhotoFromFile(file);
-        newBlocks.push({ type: 'photo', photoId, caption: '', date: current.date });
-      } catch {
-        toast('One photograph couldn’t be added');
-      }
+        const fig = document.createElement('figure');
+        fig.dataset.photo = await addPhotoFromFile(file);
+        dressFigure(fig, openPhoto);
+        figures.push(fig);
+      } catch { toast('One photograph couldn’t be added'); }
     }
-    if (!newBlocks.length) { setStatus(current._saved ? 'Saved' : ''); return; }
+    if (!figures.length || !bodyEl) return;
 
-    // Insert where the cursor was: split that paragraph in two and place the photos in between.
-    let { index, caret } = lastFocus || { index: current.blocks.length - 1, caret: Infinity };
-    if (current.blocks[index]?.type !== 'text') { index = current.blocks.length - 1; caret = Infinity; }
-    const block = current.blocks[index];
-    const before = block.text.slice(0, caret).replace(/\s+$/, '');
-    const after = block.text.slice(caret).replace(/^\s+/, '');
-    current.blocks.splice(index, 1, { type: 'text', text: before }, ...newBlocks, { type: 'text', text: after });
-    current.blocks = current.blocks.filter((b, i, arr) => b.type !== 'text' || b.text || i === 0 || i === arr.length - 1);
-    mergeTexts();
-    renderBlocks();
+    // Find the paragraph the cursor was in and place the photos there.
+    let block = savedRange && bodyEl.contains(savedRange.startContainer) ? savedRange.startContainer : null;
+    while (block && block !== bodyEl && block.parentNode !== bodyEl) block = block.parentNode;
+    if (block && block !== bodyEl) {
+      let rest = null;
+      if (['P', 'H2', 'H3'].includes(block.tagName) && block.lastChild) {
+        // split the paragraph at the cursor: the words after it continue below the photo
+        const tail = document.createRange();
+        tail.setStart(savedRange.startContainer, savedRange.startOffset);
+        tail.setEndAfter(block.lastChild);
+        const after = tail.extractContents();
+        if (after.textContent.trim()) { rest = document.createElement('p'); rest.append(after); }
+      }
+      block.after(...figures, ...(rest ? [rest] : []));
+      if (!block.textContent.trim() && !block.querySelector('figure') && block.tagName !== 'UL') block.remove();
+    } else {
+      const last = bodyEl.lastElementChild;
+      if (last && !last.textContent.trim() && last.tagName === 'P') last.before(...figures); else bodyEl.append(...figures);
+    }
+    ensureWritable();
+    savedRange = null;
+    changed();
     await saveCurrent();
-
-    const lastPhotoIndex = current.blocks.indexOf(newBlocks[newBlocks.length - 1]);
-    lastFocus = { index: lastPhotoIndex + 1, caret: 0 };
-    blocksEl.children[lastPhotoIndex]?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    figures[figures.length - 1].scrollIntoView({ block: 'center', behavior: 'smooth' });
   });
+  const addPhotos = () => pickFiles(fileInput);
 
-  // ----- collections -----
-  const tags = h('div', { class: 'tags' });
-  function renderTags() {
-    tags.replaceChildren(
-      ...collections.map((c) => h('button', {
-        class: 'tag',
-        'aria-pressed': String(current.collections.includes(c.id)),
-        onclick: () => {
-          current.collections = current.collections.includes(c.id)
-            ? current.collections.filter((x) => x !== c.id)
-            : [...current.collections, c.id];
-          renderTags();
-          changed();
-        },
-      }, c.name)),
-      h('button', {
-        class: 'tag add',
-        onclick: async () => {
-          const name = await ask({ title: 'New collection', input: '', placeholder: 'e.g. Summer 2026', ok: 'Create' });
-          if (!name) return;
-          const c = { id: uid(), name, createdAt: Date.now() };
-          await db.saveCollection(c);
-          collections.push(c);
-          current.collections.push(c.id);
-          renderTags();
-          changed();
-        },
-      }, '+ New collection'),
-    );
+  // ----- "more" sheet: pin, date, collections, delete -----
+  const moreBtn = h('button', { class: 'icon-btn', 'aria-label': 'More', onclick: openMore }, icon('more'));
+  const pinMark = h('span', { class: 'pin-mark', hidden: !current.pinned }, icon('pin'));
+
+  async function openMore() {
+    const collections = (await db.allCollections()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    sheet('This note', (close) => {
+      const pinRow = h('button', { class: 'set-row' });
+      const drawPin = () => { pinRow.replaceChildren(h('span', {}, current.pinned ? 'Unpin from the top' : 'Pin to the top'), icon('pin')); };
+      pinRow.addEventListener('click', () => { current.pinned = !current.pinned; pinMark.hidden = !current.pinned; drawPin(); changed(); });
+      drawPin();
+
+      const dateText = h('span', { class: 'set-value' }, fmt.medium(todayISO(new Date(current.createdAt))));
+      const dateRow = h('label', { class: 'set-row has-input' }, h('span', {}, 'Date'), dateText,
+        h('input', {
+          type: 'date', value: todayISO(new Date(current.createdAt)), 'aria-label': 'Date of this note',
+          oninput: (e) => {
+            if (!e.target.value) return;
+            const [y, m, d] = e.target.value.split('-').map(Number);
+            const old = new Date(current.createdAt);
+            current.createdAt = new Date(y, m - 1, d, old.getHours(), old.getMinutes()).getTime();
+            dateText.textContent = fmt.medium(e.target.value);
+            dateLine.textContent = fmt.long(e.target.value);
+            changed();
+          },
+        }));
+
+      const tags = h('div', { class: 'tags' });
+      const drawTags = () => tags.replaceChildren(
+        ...collections.map((c) => h('button', {
+          class: 'tag', 'aria-pressed': String(current.collections.includes(c.id)),
+          onclick: () => {
+            current.collections = current.collections.includes(c.id) ? current.collections.filter((x) => x !== c.id) : [...current.collections, c.id];
+            drawTags(); changed();
+          },
+        }, c.name)),
+        h('button', {
+          class: 'tag add',
+          onclick: async () => {
+            const name = await ask({ title: 'New collection', input: '', placeholder: 'A word that means something', ok: 'Create' });
+            if (!name) return;
+            const c = { id: uid(), name, description: '', order: collections.length, createdAt: Date.now() };
+            await db.saveCollection(c);
+            collections.push(c);
+            current.collections.push(c.id);
+            drawTags(); changed();
+          },
+        }, '+ New collection'),
+      );
+      drawTags();
+
+      return [
+        h('div', { class: 'set-list' }, pinRow, dateRow),
+        h('h4', { class: 'eyebrow sheet-label' }, 'Collections'),
+        tags,
+        h('button', {
+          class: 'danger-btn',
+          onclick: async () => {
+            if (!await ask({ title: 'Delete this note?', message: 'This can’t be undone.', ok: 'Delete', danger: true })) return;
+            close();
+            saveSoon.cancel();
+            if (current._saved) await db.deleteEntry(current.id);
+            cleanup();
+            current = null; bodyEl = null;
+            await cleanUpUnusedPhotos();
+            toast('Note deleted');
+            onDone();
+          },
+        }, 'Delete note'),
+      ];
+    });
   }
-  renderTags();
 
-  const deleteBtn = h('button', {
-    class: 'danger-btn',
-    onclick: async () => {
-      const ok = await ask({ title: 'Delete this page?', message: 'This can’t be undone.', ok: 'Delete', danger: true });
-      if (!ok) return;
-      saveSoon.cancel();
-      await db.deleteEntry(current.id);
-      current = null;
-      await cleanUpUnusedPhotos();
-      toast('Page deleted');
-      onDone({ deleted: true });
-    },
-  }, 'Delete this page');
+  // ----- toolbar (stays just above the keyboard) -----
+  const tool = (name, label, action) => h('button', {
+    class: 'tool', 'aria-label': label,
+    onpointerdown: (e) => e.preventDefault(), // keep the cursor where it is
+    onclick: action,
+  }, icon(name));
+  const toolbar = h('div', { class: 'toolbar', role: 'toolbar', 'aria-label': 'Formatting' },
+    tool('heading', 'Heading', format.heading),
+    tool('bold', 'Bold', format.bold),
+    tool('list', 'List', format.list),
+    tool('check', 'Checklist', format.checklist),
+    tool('photo', 'Add a photograph', addPhotos),
+    h('span', { class: 'toolbar-space' }),
+    h('button', { class: 'tool', 'aria-label': 'Hide keyboard', onclick: () => document.activeElement?.blur() }, icon('keyboard')),
+  );
+  const vv = window.visualViewport;
+  const placeToolbar = () => {
+    const hidden = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+    toolbar.style.transform = `translateY(${-hidden}px)`;
+  };
+  vv?.addEventListener('resize', placeToolbar);
+  vv?.addEventListener('scroll', placeToolbar);
+  cleanup = () => {
+    vv?.removeEventListener('resize', placeToolbar);
+    vv?.removeEventListener('scroll', placeToolbar);
+    document.removeEventListener('selectionchange', rememberRange);
+    cleanup = () => {};
+  };
 
-  renderBlocks();
+  const dateLine = h('div', { class: 'eyebrow note-date' }, fmt.long(todayISO(new Date(current.createdAt))));
 
-  fill(root, 
-    topbar,
-    h('main', { class: `screen editor enter kind-${current.kind}` },
-      meta,
-      titleInput,
-      moodRow,
-      promptBtn,
-      h('hr', { class: 'short-rule' }),
-      blocksEl,
-      h('button', { class: 'ed-add', onclick: addPhotos }, icon('photo'), 'Add a photograph'),
-      fileInput,
-      h('section', { class: 'ed-extras' },
-        h('div', { class: 'ed-section' }, h('h2', { class: 'eyebrow' }, 'Collections'), tags),
-        h('div', { class: 'ed-section' },
-          h('label', { class: 'toggle-row' },
-            h('span', {}, h('strong', {}, 'Important date'), h('small', {}, 'Show this page on your timeline')),
-            h('input', { type: 'checkbox', class: 'switch', checked: !!current.milestone, onchange: (e) => { current.milestone = e.target.checked; changed(); } }),
-          ),
-        ),
-        deleteBtn,
-      ),
+  root.replaceChildren(
+    h('header', { class: 'bar' },
+      h('button', { class: 'icon-btn', 'aria-label': 'Back', onclick: () => onDone() }, icon('back')),
+      h('div', { class: 'bar-title' }, h('span', { class: 'save-state', id: 'save-status' }, '')),
+      h('div', { class: 'bar-actions' }, pinMark, moreBtn),
     ),
+    h('main', { class: 'screen editor enter' }, dateLine, titleEl, bodyEl, fileInput),
+    toolbar,
   );
 
+  try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch { /* not supported everywhere */ }
   requestAnimationFrame(() => {
-    autoGrow(titleInput);
-    blocksEl.querySelectorAll('textarea').forEach(autoGrow);
-    if (!id) {
-      const first = blocksEl.querySelector('textarea');
-      if ((current.kind === 'letter' || current.kind === 'thought' || current.kind === 'detail') && first) {
-        first.focus();
-        first.setSelectionRange(first.value.length, first.value.length);
-      } else {
-        titleInput.focus();
-      }
-    }
+    autoGrow(titleEl);
+    placeToolbar();
+    if (!id) bodyEl.focus(); // a new note: start writing right away
   });
 }

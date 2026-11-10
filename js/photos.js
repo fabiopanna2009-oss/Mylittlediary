@@ -76,32 +76,15 @@ export function photoImg(id, size = 'full', className = '') {
   return img;
 }
 
-// A printed photograph: the picture with a thin white border.
-// Upright (portrait) photos are placed a little narrower, alternating left and right,
-// the way you would glue them into a real journal.
-export function printFigure(id, { alt = false, caption = null } = {}) {
-  const img = photoImg(id, 'full');
-  const frame = document.createElement('div');
-  frame.className = 'print-frame';
-  frame.append(img);
-  const figure = document.createElement('figure');
-  figure.className = 'print';
-  figure.append(frame);
-  if (caption) figure.append(caption);
-  img.addEventListener('load', () => {
-    if (img.naturalHeight > img.naturalWidth * 1.08) {
-      figure.classList.add('portrait');
-      if (alt) figure.classList.add('alt');
-    }
-  });
-  return { figure, frame, img };
-}
-
-// Delete pictures that no page uses anymore (e.g. after a photo was removed from a page).
+// Delete pictures that nothing uses anymore (e.g. after a photo was removed from a note).
 export async function cleanUpUnusedPhotos() {
-  const [entries, photoIds] = await Promise.all([db.allEntries(), db.photoIds()]);
+  const [notes, collections, photoIds] = await Promise.all([db.allEntries(), db.allCollections(), db.photoIds()]);
   const used = new Set();
-  entries.forEach((e) => (e.blocks || []).forEach((b) => { if (b.type === 'photo') used.add(b.photoId); }));
+  notes.forEach((n) => {
+    (n.photos || []).forEach((p) => used.add(p.photoId));
+    (n.blocks || []).forEach((b) => { if (b.type === 'photo') used.add(b.photoId); }); // notes from older versions
+  });
+  collections.forEach((c) => { if (c.coverPhotoId) used.add(c.coverPhotoId); });
   for (const id of photoIds) {
     if (!used.has(id)) {
       forgetPhotoURL(id);

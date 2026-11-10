@@ -11,6 +11,7 @@
 import { db } from './db.js';
 import { makeThumb, forgetPhotoURL } from './photos.js';
 import { todayISO } from './util.js';
+import { upgradeAll } from './notes.js';
 
 // ---------- CRC32 (a checksum every zip file needs) ----------
 const CRC_TABLE = (() => {
@@ -133,9 +134,9 @@ async function readZip(blob) {
 const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/heic': 'heic', 'image/webp': 'webp', 'image/gif': 'gif' };
 
 export async function createBackup() {
-  const [entries, collections, photos, bookTitle, letterTo] = await Promise.all([
+  const [entries, collections, photos, bookTitle, noteSort] = await Promise.all([
     db.allEntries(), db.allCollections(), db.allPhotos(),
-    db.getSetting('bookTitle'), db.getSetting('letterTo'),
+    db.getSetting('bookTitle'), db.getSetting('noteSort'),
   ]);
 
   const photoFiles = photos.map((p) => ({
@@ -148,9 +149,9 @@ export async function createBackup() {
 
   const diary = {
     app: 'little-memories',
-    format: 1,
+    format: 2,
     exportedAt: new Date().toISOString(),
-    settings: { bookTitle, letterTo },
+    settings: { bookTitle, noteSort },
     collections,
     entries,
     photos: photoFiles.map(({ blob, ...info }) => info),
@@ -200,8 +201,13 @@ export async function importBackup(file) {
     throw new Error('This is not a Little Memories backup.');
   }
 
+  // Collections first, so notes from an older backup can be sorted into them.
+  const myCollections = new Set((await db.allCollections()).map((c) => c.id));
+  await db.saveCollections((diary.collections || []).filter((c) => !myCollections.has(c.id)));
+  const incoming = await upgradeAll(diary.entries); // backups from older versions are upgraded to notes
+
   const existing = new Map((await db.allEntries()).map((e) => [e.id, e]));
-  const newer = diary.entries.filter((e) => {
+  const newer = incoming.filter((e) => {
     const mine = existing.get(e.id);
     return !mine || (e.updatedAt || 0) > (mine.updatedAt || 0);
   });
@@ -217,8 +223,6 @@ export async function importBackup(file) {
     await db.savePhoto({ id: info.id, blob: typed, thumb, type: typed.type, createdAt: info.createdAt || Date.now() });
   }
 
-  const myCollections = new Set((await db.allCollections()).map((c) => c.id));
-  await db.saveCollections((diary.collections || []).filter((c) => !myCollections.has(c.id)));
   await db.saveEntries(newer);
 
   return { pages: newer.length, total: diary.entries.length };

@@ -48,6 +48,13 @@ const ICONS = {
   right: '<path d="M9.5 6l6 6-6 6"/>',
   chevron: '<path d="M9.5 6l6 6-6 6"/>',
   more: '<circle cx="6" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="18" cy="12" r="1"/>',
+  settings: '<path d="M4 7.5h9M17 7.5h3M4 16.5h3M11 16.5h9"/><circle cx="15" cy="7.5" r="2"/><circle cx="9" cy="16.5" r="2"/>',
+  pin: '<path d="M9 4.5h6l-1 5 3 3.5H7l3-3.5z"/><path d="M12 13v6.5"/>',
+  heading: '<path d="M5 6v12M13 6v12M5 12h8"/><path d="M17 11l2.5-1.5V18"/>',
+  bold: '<path d="M7.5 5.5h5.2a3.2 3.2 0 010 6.4H7.5zM7.5 11.9h6a3.3 3.3 0 010 6.6h-6z"/>',
+  list: '<path d="M9.5 7h10M9.5 12h10M9.5 17h10"/><circle cx="5.2" cy="7" r=".8"/><circle cx="5.2" cy="12" r=".8"/><circle cx="5.2" cy="17" r=".8"/>',
+  check: '<rect x="4" y="5" width="6" height="6" rx="1"/><path d="M5.5 16.5l1.6 1.6 3-3.4"/><path d="M13.5 8h6.5M13.5 16.5h6.5"/>',
+  keyboard: '<path d="M6 9.5l6 6 6-6"/>',
 };
 
 export function icon(name, extraClass = '') {
@@ -131,23 +138,6 @@ export function debounce(fn, ms) {
   return wrapped;
 }
 
-export function entryText(entry) {
-  return (entry.blocks || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n\n').trim();
-}
-
-export function entryPhotos(entry) {
-  return (entry.blocks || []).filter((b) => b.type === 'photo');
-}
-
-export function isEntryEmpty(entry) {
-  return !entry.title?.trim() && !entryText(entry) && entryPhotos(entry).length === 0;
-}
-
-// Sort newest first: by date, then time, then when it was created.
-export function byNewest(a, b) {
-  return (b.date + (b.time || '')).localeCompare(a.date + (a.time || '')) || (b.createdAt - a.createdAt);
-}
-
 export function formatBytes(bytes) {
   if (!bytes) return '0 MB';
   const mb = bytes / (1024 * 1024);
@@ -199,4 +189,30 @@ export function ask({ title, message = '', ok = 'OK', cancel = 'Cancel', danger 
       if (field) field.focus();
     });
   });
+}
+
+// ---------- Sheet (slides up from the bottom, like on iPhone) ----------
+// sheet(title, (close) => [elements…], onClose) — returns a function that closes it.
+export function sheet(title, build, onClose = null) {
+  let open = true;
+  const close = () => {
+    if (!open) return;
+    open = false;
+    overlay.classList.remove('show');
+    setTimeout(() => overlay.remove(), 240);
+    if (onClose) onClose();
+  };
+  const panel = h('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
+    h('div', { class: 'sheet-head' },
+      h('h3', { class: 'sheet-title' }, title),
+      h('button', { class: 'link', onclick: () => close() }, 'Done'),
+    ),
+  );
+  const body = h('div', { class: 'sheet-body' });
+  panel.append(body);
+  const overlay = h('div', { class: 'sheet-overlay', onclick: (e) => { if (e.target === overlay) close(); } }, panel);
+  fill(body, build(close));
+  document.body.append(overlay);
+  requestAnimationFrame(() => overlay.classList.add('show'));
+  return close;
 }

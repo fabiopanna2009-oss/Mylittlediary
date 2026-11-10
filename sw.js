@@ -4,7 +4,7 @@
 // How updates work: the app opens instantly from the saved copy, and in the background
 // it checks GitHub for a newer version. The next time you open the app, you get the new one.
 
-const CACHE = 'little-memories-v2';
+const CACHE = 'little-memories-v3';
 
 const APP_FILES = [
   './',
@@ -17,6 +17,7 @@ const APP_FILES = [
   'js/util.js',
   'js/content.js',
   'js/photos.js',
+  'js/notes.js',
   'js/lock.js',
   'js/backup.js',
   'js/editor.js',

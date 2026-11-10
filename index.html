@@ -28,25 +28,15 @@
   <!-- The screens are drawn in here by js/app.js -->
   <div id="app"></div>
 
-  <!-- Bottom navigation, shown on the four main screens -->
+  <!-- Bottom navigation: four places, and "new note" always in the middle -->
   <nav class="tabbar" id="tabbar" aria-label="Main">
-    <button class="tab" data-tab="">
-      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4.5h11.5a2.5 2.5 0 012.5 2.5v12.5H7.5A2.5 2.5 0 015 17V4.5z"/><path d="M5 17a2.5 2.5 0 012.5-2.5H19"/><path d="M9 8.5h6"/></svg></span>
-      Today
-    </button>
-    <button class="tab" data-tab="journal">
-      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h16M4 10.5h16M4 15.5h10M4 20h7"/></svg></span>
-      Journal
-    </button>
-    <button class="tab" data-tab="gallery">
-      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="1"/><path d="M3.5 15.5l4.5-4 4 3.5 3-2.5 5.5 4.5"/><circle cx="15.5" cy="9.5" r="1.4"/></svg></span>
-      Photos
-    </button>
-    <button class="tab" data-tab="contents">
-      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 6h11M8.5 12h11M8.5 18h11"/><path d="M4.5 6h.5M4.5 12h.5M4.5 18h.5"/></svg></span>
-      Contents
-    </button>
+    <button class="tab" data-tab=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4.5h11.5a2.5 2.5 0 012.5 2.5v12.5H7.5A2.5 2.5 0 015 17V4.5z"/><path d="M5 17a2.5 2.5 0 012.5-2.5H19"/></svg></span>Home</button>
+    <button class="tab" data-tab="notes"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h16M4 10.5h16M4 15.5h10"/></svg></span>Notes</button>
+    <button class="tab-compose" data-compose aria-label="New note"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5H6A1.5 1.5 0 004.5 6v12A1.5 1.5 0 006 19.5h12a1.5 1.5 0 001.5-1.5v-6"/><path d="M17.5 4l2.5 2.5-7.5 7.5-3.2.7.7-3.2z"/></svg></span></button>
+    <button class="tab" data-tab="memories"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4.5h10v15l-5-3.5-5 3.5z"/></svg></span>Memories</button>
+    <button class="tab" data-tab="search"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="M15.5 15.5L20 20"/></svg></span>Search</button>
   </nav>
+  <input id="keyboard-holder" class="keyboard-holder" type="text" aria-hidden="true" tabindex="-1">
 
   <!-- Lock screen (covers everything while locked) -->
   <section id="lock" class="lock show" aria-label="Locked">
